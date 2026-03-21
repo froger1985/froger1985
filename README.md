@@ -1,5 +1,7 @@
 ## Hi there 👋
 
+<!-- GitHub-Claude integration check: verified -->
+
 <!--
 **froger1985/froger1985** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 
