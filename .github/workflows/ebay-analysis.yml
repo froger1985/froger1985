@@ -24,6 +24,9 @@ on:
     # 毎週月曜 0:00 UTC = 日本時間 月曜 9:00
     - cron: '0 0 * * 1'
 
+permissions:
+  contents: write
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
