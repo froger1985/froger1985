@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """
-eBay Sold Listings Analyzer — Prototype
+eBay Sold Listings Analyzer — SerpAPI版
 ========================================
-eBayの売却済みデータをスクレイピングし、
+SerpAPIを使ってeBayの売却済みデータを取得し、
 日本発のニッチ商品の傾向を分析するツール。
+
+事前準備:
+  1. https://serpapi.com/ で無料アカウント作成
+  2. APIキーを取得
+  3. .env ファイルに SERPAPI_KEY=your_key を記入
 
 使い方:
   python ebay_sold_analyzer.py --keywords "japanese anime figure,japanese vintage toy"
@@ -14,6 +19,7 @@ eBayの売却済みデータをスクレイピングし、
 import argparse
 import csv
 import json
+import os
 import re
 import time
 import random
@@ -22,25 +28,13 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from urllib.parse import quote_plus, urlencode
+from urllib.parse import urlencode
 
 try:
     import httpx
 except ImportError:
     print("httpx が必要です: pip install httpx")
     sys.exit(1)
-
-try:
-    from selectolax.parser import HTMLParser
-except ImportError:
-    HTMLParser = None
-    try:
-        from bs4 import BeautifulSoup
-    except ImportError:
-        print("selectolax または beautifulsoup4 が必要です:")
-        print("  pip install selectolax")
-        print("  または pip install beautifulsoup4")
-        sys.exit(1)
 
 
 # =====================================================
@@ -79,7 +73,190 @@ class KeywordAnalysis:
 
 
 # =====================================================
-# eBay Scraper
+# SerpAPI Client
+# =====================================================
+
+SERPAPI_BASE_URL = "https://serpapi.com/search"
+
+
+def load_api_key() -> str:
+    """APIキーを .env ファイルまたは環境変数から読み込む"""
+    # 環境変数を先にチェック
+    key = os.environ.get("SERPAPI_KEY", "")
+    if key:
+        return key
+
+    # .env ファイルから読み込み
+    env_path = Path(__file__).parent / ".env"
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            if line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            if k.strip() == "SERPAPI_KEY":
+                return v.strip()
+
+    return ""
+
+
+def fetch_ebay_sold_serpapi(keyword: str, api_key: str, page: int = 1) -> dict:
+    """SerpAPIでeBay売却済みデータを取得"""
+    params = {
+        "engine": "ebay",
+        "ebay_domain": "ebay.com",
+        "_nkw": keyword,
+        "LH_Complete": "1",
+        "LH_Sold": "1",
+        "_sop": "13",       # 新しい順
+        "_ipg": "60",       # 1ページ60件
+        "api_key": api_key,
+    }
+    if page > 1:
+        params["_pgn"] = str(page)
+
+    url = f"{SERPAPI_BASE_URL}?{urlencode(params)}"
+
+    with httpx.Client(timeout=30.0) as client:
+        response = client.get(url)
+        if response.status_code != 200:
+            print(f"  ⚠️  SerpAPI HTTP {response.status_code}")
+            return {}
+        return response.json()
+
+
+def parse_serpapi_results(data: dict, keyword: str) -> list[SoldItem]:
+    """SerpAPIのJSONレスポンスからSoldItemリストを作成"""
+    items = []
+    organic = data.get("organic_results", [])
+
+    for result in organic:
+        title = result.get("title", "")
+        if not title:
+            continue
+
+        # 価格の取得
+        price_info = result.get("price", {})
+        if isinstance(price_info, dict):
+            raw = price_info.get("raw", "")
+            extracted = price_info.get("extracted", None)
+        else:
+            raw = str(price_info) if price_info else ""
+            extracted = None
+
+        # extracted がない場合はrawからパース
+        if extracted is not None:
+            price = float(extracted)
+        else:
+            price = parse_price(raw)
+
+        if price is None or price <= 0:
+            continue
+
+        # 送料
+        shipping_info = result.get("shipping", "")
+        shipping = None
+        if isinstance(shipping_info, str):
+            if "free" in shipping_info.lower():
+                shipping = 0.0
+            else:
+                shipping = parse_price(shipping_info)
+
+        # セラー情報
+        seller_info = result.get("seller_info", {})
+        if isinstance(seller_info, dict):
+            seller = seller_info.get("name", "")
+        else:
+            seller = str(seller_info) if seller_info else ""
+
+        # 場所 — SerpAPIでは item_location に入っていることが多い
+        location = result.get("item_location", "")
+        if not location:
+            # extensions にある場合もある
+            for ext in result.get("extensions", []):
+                if isinstance(ext, str) and ("from" in ext.lower() or "japan" in ext.lower()):
+                    location = ext
+                    break
+
+        # 売却日
+        sold_date = ""
+        for ext in result.get("extensions", []):
+            if isinstance(ext, str) and "sold" in ext.lower():
+                sold_date = ext
+                break
+
+        # 商品状態
+        condition = result.get("condition", "")
+
+        # URL
+        item_url = result.get("link", "")
+
+        items.append(SoldItem(
+            title=title,
+            price_usd=price,
+            sold_date=sold_date,
+            shipping_usd=shipping,
+            seller=seller,
+            seller_location=location,
+            item_url=item_url,
+            condition=condition,
+            keyword=keyword,
+        ))
+
+    return items
+
+
+def parse_price(price_text: str) -> Optional[float]:
+    """価格テキストからUSD金額を抽出"""
+    if not price_text:
+        return None
+    match = re.search(r'\$?([\d,]+\.?\d*)', price_text.replace(',', ''))
+    if match:
+        try:
+            return float(match.group(1))
+        except ValueError:
+            return None
+    return None
+
+
+def scrape_ebay_sold(keyword: str, api_key: str, max_pages: int = 2, delay_range: tuple = (1, 3)) -> list[SoldItem]:
+    """SerpAPI経由でeBayの売却済みリストを取得"""
+    all_items = []
+
+    for page in range(1, max_pages + 1):
+        print(f"  📡 Fetching: {keyword} (page {page}/{max_pages})...")
+
+        data = fetch_ebay_sold_serpapi(keyword, api_key, page=page)
+
+        # エラーチェック
+        if not data:
+            print(f"  ⚠️  No response for '{keyword}' page {page}")
+            break
+
+        error = data.get("error")
+        if error:
+            print(f"  ❌ SerpAPI error: {error}")
+            break
+
+        items = parse_serpapi_results(data, keyword)
+        if not items:
+            print(f"  ℹ️  No more results for '{keyword}' at page {page}")
+            break
+
+        all_items.extend(items)
+        print(f"  ✅ Found {len(items)} sold items (total: {len(all_items)})")
+
+        # レート制限: ランダム遅延
+        if page < max_pages:
+            delay = random.uniform(*delay_range)
+            print(f"  ⏳ Waiting {delay:.1f}s...")
+            time.sleep(delay)
+
+    return all_items
+
+
+# =====================================================
+# Analysis
 # =====================================================
 
 # 日本関連を示すキーワード（発送元偽装の検出用）
@@ -94,253 +271,6 @@ JAPAN_INDICATORS = [
     "japan version", "japanese version",
 ]
 
-# eBayスクレイピング用のUser-Agentローテーション
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15",
-]
-
-
-def build_ebay_sold_url(keyword: str, page: int = 1, min_price: float = None, max_price: float = None) -> str:
-    """eBay売却済み検索URLを組み立てる"""
-    params = {
-        "_nkw": keyword,
-        "LH_Complete": "1",  # 完了したオークション
-        "LH_Sold": "1",     # 売れたもののみ
-        "_sop": "13",        # 新しい順にソート
-        "_ipg": "60",        # 1ページ60件
-    }
-    if page > 1:
-        params["_pgn"] = str(page)
-    if min_price is not None:
-        params["_udlo"] = str(min_price)
-    if max_price is not None:
-        params["_udhi"] = str(max_price)
-
-    base_url = "https://www.ebay.com/sch/i.html"
-    return f"{base_url}?{urlencode(params)}"
-
-
-def get_http_client() -> httpx.Client:
-    """HTTPクライアントを作成"""
-    return httpx.Client(
-        headers={
-            "User-Agent": random.choice(USER_AGENTS),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-        },
-        follow_redirects=True,
-        timeout=30.0,
-    )
-
-
-def parse_price(price_text: str) -> Optional[float]:
-    """価格テキストからUSD金額を抽出"""
-    if not price_text:
-        return None
-    # $XX.XX のパターン
-    match = re.search(r'\$?([\d,]+\.?\d*)', price_text.replace(',', ''))
-    if match:
-        try:
-            return float(match.group(1))
-        except ValueError:
-            return None
-    return None
-
-
-def parse_sold_items_selectolax(html: str, keyword: str) -> list[SoldItem]:
-    """selectolaxでeBay売却済みページをパース"""
-    tree = HTMLParser(html)
-    items = []
-
-    # eBayの検索結果はs-item クラスのli要素
-    for node in tree.css("li.s-item"):
-        # タイトル
-        title_node = node.css_first("div.s-item__title span[role='heading']")
-        if not title_node:
-            title_node = node.css_first("div.s-item__title span")
-        if not title_node:
-            title_node = node.css_first("h3.s-item__title")
-        title = title_node.text(strip=True) if title_node else ""
-
-        # "Shop on eBay" などのプロモーション行をスキップ
-        if not title or "shop on ebay" in title.lower():
-            continue
-
-        # 価格
-        price_node = node.css_first("span.s-item__price")
-        price_text = price_node.text(strip=True) if price_node else ""
-        price = parse_price(price_text)
-        if price is None:
-            continue
-
-        # 送料
-        shipping_node = node.css_first("span.s-item__shipping")
-        shipping_text = shipping_node.text(strip=True) if shipping_node else ""
-        shipping = None
-        if "free" in shipping_text.lower():
-            shipping = 0.0
-        else:
-            shipping = parse_price(shipping_text)
-
-        # 売却日
-        sold_node = node.css_first("span.POSITIVE")
-        if not sold_node:
-            sold_node = node.css_first("span.s-item__ended-date")
-        sold_date = sold_node.text(strip=True) if sold_node else ""
-
-        # URL
-        link_node = node.css_first("a.s-item__link")
-        item_url = link_node.attributes.get("href", "") if link_node else ""
-
-        # セラー情報
-        seller_node = node.css_first("span.s-item__seller-info-text")
-        seller = seller_node.text(strip=True) if seller_node else ""
-
-        # 商品状態
-        condition_node = node.css_first("span.SECONDARY_INFO")
-        condition = condition_node.text(strip=True) if condition_node else ""
-
-        # セラーの場所
-        location_node = node.css_first("span.s-item__location")
-        location = location_node.text(strip=True) if location_node else ""
-
-        items.append(SoldItem(
-            title=title,
-            price_usd=price,
-            sold_date=sold_date,
-            shipping_usd=shipping,
-            seller=seller,
-            seller_location=location,
-            item_url=item_url,
-            condition=condition,
-            keyword=keyword,
-        ))
-
-    return items
-
-
-def parse_sold_items_bs4(html: str, keyword: str) -> list[SoldItem]:
-    """BeautifulSoupでeBay売却済みページをパース"""
-    soup = BeautifulSoup(html, "html.parser")
-    items = []
-
-    for li in soup.select("li.s-item"):
-        # タイトル
-        title_el = li.select_one("div.s-item__title span[role='heading']")
-        if not title_el:
-            title_el = li.select_one("div.s-item__title span")
-        if not title_el:
-            title_el = li.select_one("h3.s-item__title")
-        title = title_el.get_text(strip=True) if title_el else ""
-
-        if not title or "shop on ebay" in title.lower():
-            continue
-
-        # 価格
-        price_el = li.select_one("span.s-item__price")
-        price_text = price_el.get_text(strip=True) if price_el else ""
-        price = parse_price(price_text)
-        if price is None:
-            continue
-
-        # 送料
-        shipping_el = li.select_one("span.s-item__shipping")
-        shipping_text = shipping_el.get_text(strip=True) if shipping_el else ""
-        shipping = None
-        if "free" in shipping_text.lower():
-            shipping = 0.0
-        else:
-            shipping = parse_price(shipping_text)
-
-        # 売却日
-        sold_el = li.select_one("span.POSITIVE")
-        if not sold_el:
-            sold_el = li.select_one("span.s-item__ended-date")
-        sold_date = sold_el.get_text(strip=True) if sold_el else ""
-
-        # URL
-        link_el = li.select_one("a.s-item__link")
-        item_url = link_el.get("href", "") if link_el else ""
-
-        # セラー
-        seller_el = li.select_one("span.s-item__seller-info-text")
-        seller = seller_el.get_text(strip=True) if seller_el else ""
-
-        # 状態
-        condition_el = li.select_one("span.SECONDARY_INFO")
-        condition = condition_el.get_text(strip=True) if condition_el else ""
-
-        # 場所
-        location_el = li.select_one("span.s-item__location")
-        location = location_el.get_text(strip=True) if location_el else ""
-
-        items.append(SoldItem(
-            title=title,
-            price_usd=price,
-            sold_date=sold_date,
-            shipping_usd=shipping,
-            seller=seller,
-            seller_location=location,
-            item_url=item_url,
-            condition=condition,
-            keyword=keyword,
-        ))
-
-    return items
-
-
-def parse_sold_items(html: str, keyword: str) -> list[SoldItem]:
-    """利用可能なパーサーで売却済みアイテムをパース"""
-    if HTMLParser is not None:
-        return parse_sold_items_selectolax(html, keyword)
-    else:
-        return parse_sold_items_bs4(html, keyword)
-
-
-def scrape_ebay_sold(keyword: str, max_pages: int = 2, delay_range: tuple = (2, 5)) -> list[SoldItem]:
-    """eBayの売却済みリストをスクレイピング"""
-    all_items = []
-    client = get_http_client()
-
-    for page in range(1, max_pages + 1):
-        url = build_ebay_sold_url(keyword, page=page)
-        print(f"  📡 Fetching: {keyword} (page {page}/{max_pages})...")
-
-        try:
-            response = client.get(url)
-            if response.status_code != 200:
-                print(f"  ⚠️  HTTP {response.status_code} for {keyword} page {page}")
-                break
-
-            items = parse_sold_items(response.text, keyword)
-            if not items:
-                print(f"  ℹ️  No more results for '{keyword}' at page {page}")
-                break
-
-            all_items.extend(items)
-            print(f"  ✅ Found {len(items)} sold items (total: {len(all_items)})")
-
-        except httpx.HTTPError as e:
-            print(f"  ❌ Error fetching {keyword}: {e}")
-            break
-
-        # レート制限: ランダム遅延
-        if page < max_pages:
-            delay = random.uniform(*delay_range)
-            print(f"  ⏳ Waiting {delay:.1f}s...")
-            time.sleep(delay)
-
-    client.close()
-    return all_items
-
-
-# =====================================================
-# Analysis
-# =====================================================
 
 def is_japan_related(text: str) -> bool:
     """テキストに日本関連のキーワードが含まれるか"""
@@ -351,10 +281,8 @@ def is_japan_related(text: str) -> bool:
 def detect_suspected_japan_seller(item: SoldItem) -> bool:
     """発送元を偽装している可能性のある日本セラーを検出"""
     location = (item.seller_location or "").lower()
-    # 明示的に日本と書いてあるなら偽装ではない
     if "japan" in location:
         return False
-    # 日本以外の発送元だが、タイトルが日本商品っぽい場合
     if location and "japan" not in location:
         if is_japan_related(item.title):
             return True
@@ -598,7 +526,7 @@ def save_to_json(analyses: list[KeywordAnalysis], output_path: str):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="eBay売却済みデータを分析してニッチな日本商品を発掘する"
+        description="eBay売却済みデータを分析してニッチな日本商品を発掘する（SerpAPI版）"
     )
     parser.add_argument(
         "--keywords", "-k",
@@ -626,17 +554,40 @@ def main():
         help="出力ファイルパス (default: data/ebay_analysis.csv)"
     )
     parser.add_argument(
+        "--api-key",
+        type=str, default="",
+        help="SerpAPI APIキー（省略時は .env または環境変数から読み込み）"
+    )
+    parser.add_argument(
         "--delay-min",
-        type=float, default=2.0,
-        help="リクエスト間の最小遅延秒数 (default: 2.0)"
+        type=float, default=1.0,
+        help="リクエスト間の最小遅延秒数 (default: 1.0)"
     )
     parser.add_argument(
         "--delay-max",
-        type=float, default=5.0,
-        help="リクエスト間の最大遅延秒数 (default: 5.0)"
+        type=float, default=3.0,
+        help="リクエスト間の最大遅延秒数 (default: 3.0)"
     )
 
     args = parser.parse_args()
+
+    # APIキー取得
+    api_key = args.api_key or load_api_key()
+    if not api_key:
+        print("❌ SerpAPI のAPIキーが必要です。")
+        print()
+        print("設定方法（いずれか1つ）:")
+        print("  1. .env ファイルに SERPAPI_KEY=your_key を記入")
+        print("  2. 環境変数: export SERPAPI_KEY=your_key  (Mac/Linux)")
+        print("     または:  set SERPAPI_KEY=your_key       (Windows)")
+        print("  3. コマンド引数: --api-key your_key")
+        print()
+        print("APIキーの取得方法:")
+        print("  1. https://serpapi.com/ にアクセス")
+        print("  2. 「Register」でアカウント作成（無料）")
+        print("  3. ダッシュボードで「API Key」をコピー")
+        print("  ※ 無料プランで月100検索まで使えます")
+        sys.exit(1)
 
     # キーワード収集
     keywords = []
@@ -655,10 +606,9 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    print(f"\n🔍 eBay Sold Listings Analyzer")
+    print(f"\n🔍 eBay Sold Listings Analyzer (SerpAPI)")
     print(f"   Keywords: {len(keywords)}件")
     print(f"   Pages per keyword: {args.pages}")
-    print(f"   Delay: {args.delay_min}〜{args.delay_max}s")
     print(f"   Output: {args.output}")
     print()
 
@@ -672,14 +622,14 @@ def main():
 
     for i, keyword in enumerate(keywords, 1):
         print(f"\n[{i}/{len(keywords)}] 🔎 Searching: {keyword}")
-        items = scrape_ebay_sold(keyword, max_pages=args.pages, delay_range=delay_range)
+        items = scrape_ebay_sold(keyword, api_key, max_pages=args.pages, delay_range=delay_range)
         analysis = analyze_keyword(keyword, items)
         all_analyses.append(analysis)
         print_analysis(analysis)
 
         # キーワード間の遅延
         if i < len(keywords):
-            delay = random.uniform(args.delay_min + 1, args.delay_max + 2)
+            delay = random.uniform(args.delay_min + 1, args.delay_max + 1)
             print(f"\n⏳ Next keyword in {delay:.1f}s...")
             time.sleep(delay)
 
@@ -695,15 +645,23 @@ def main():
     # 競合の少ない有望キーワードをソート
     promising = [a for a in all_analyses if a.total_sold > 0]
     promising.sort(key=lambda a: (
-        -a.total_sold,  # 売れている数が多い
-        a.japan_sellers + a.suspected_japan_sellers,  # 競合が少ない
+        -a.total_sold,
+        a.japan_sellers + a.suspected_japan_sellers,
     ))
 
-    print(f"\n🏆 有望なキーワード (売れているが競合が少ない):\n")
-    for a in promising[:15]:
-        jp_total = a.japan_sellers + a.suspected_japan_sellers
-        print(f"  {a.competition_score:12s} | sold:{a.total_sold:3d} | avg:${a.avg_price_usd:7.2f} | "
-              f"sellers:{a.unique_sellers:2d} (JP:{a.japan_sellers}+疑{a.suspected_japan_sellers}) | {a.keyword}")
+    if promising:
+        print(f"\n🏆 有望なキーワード (売れているが競合が少ない):\n")
+        for a in promising[:15]:
+            print(f"  {a.competition_score:12s} | sold:{a.total_sold:3d} | avg:${a.avg_price_usd:7.2f} | "
+                  f"sellers:{a.unique_sellers:2d} (JP:{a.japan_sellers}+疑{a.suspected_japan_sellers}) | {a.keyword}")
+    else:
+        print("\n  ⚠️  売却データが見つかりませんでした。")
+        print("  キーワードを変えて再試行してください。")
+
+    # API使用量の注意
+    total_requests = sum(min(args.pages, 2) for _ in keywords)  # 概算
+    print(f"\n📊 API使用量（概算）: 約{total_requests}リクエスト")
+    print(f"   ※ 無料プランの上限: 100リクエスト/月")
 
     print(f"\n✅ Done! Results saved to {args.output}")
 

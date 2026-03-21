@@ -27,7 +27,37 @@ Pythonはこのツールを動かすのに必要なソフトです（無料）�
 
 ---
 
-## 手順2: ツールをダウンロードする
+## 手順2: SerpAPIに登録する（無料）
+
+このツールは「SerpAPI」というサービスを使ってeBayのデータを取得します。
+無料プランで **月100回まで** 検索できます（クレジットカード不要）。
+
+1. https://serpapi.com/ にアクセス
+2. 右上の **「Register」** をクリック
+3. メールアドレスとパスワードを入力して登録
+4. メールが届くので、リンクをクリックして認証
+5. ログイン後、ダッシュボードに表示される **「API Key」** をコピー
+   - `abc123def456...` のような長い文字列です
+
+### APIキーを設定する
+
+1. ダウンロードした `sourcing-tool` フォルダを開く
+2. `.env.example` というファイルを見つける
+   - **注意**: Windowsでは隠しファイルになっていることがあります
+   - エクスプローラーの「表示」→「隠しファイル」にチェックを入れてください
+3. `.env.example` をコピーして `.env` にリネームする
+4. `.env` をメモ帳で開く
+5. `SERPAPI_KEY=your_serpapi_key_here` の `your_serpapi_key_here` をコピーしたAPIキーに置き換える
+6. 保存して閉じる
+
+**完成例:**
+```
+SERPAPI_KEY=abc123def456789xyz
+```
+
+---
+
+## 手順3: ツールをダウンロードする
 
 1. ブラウザで以下にアクセス:
    ```
@@ -43,30 +73,30 @@ Pythonはこのツールを動かすのに必要なソフトです（無料）�
 froger1985-main/
   └── sourcing-tool/
         ├── ebay_sold_analyzer.py  ← これがメインのツール
+        ├── .env.example           ← これをコピーして .env を作る
         ├── data/                   ← 結果がここに保存される
         └── ...
 ```
 
 ---
 
-## 手順3: 必要なライブラリをインストールする
+## 手順4: 必要なライブラリをインストールする
 
 1. コマンドプロンプトを開く（`Windows + R` → 「cmd」→ Enter）
 2. 以下をコピペしてEnter:
    ```
-   pip install httpx selectolax
+   pip install httpx
    ```
-3. 色々とダウンロードが始まる
-4. 最後に **`Successfully installed`** と出ればOK
+3. 最後に **`Successfully installed`** と出ればOK
 
 **もし `pip が見つからない` とエラーが出たら:**
 ```
-python -m pip install httpx selectolax
+python -m pip install httpx
 ```
 
 ---
 
-## 手順4: ツールを実行する
+## 手順5: ツールを実行する
 
 ### まずフォルダに移動する
 
@@ -81,35 +111,37 @@ cd %USERPROFILE%\Downloads\froger1985-main\sourcing-tool
 cd %USERPROFILE%\Desktop\froger1985-main\sourcing-tool
 ```
 
-### テスト実行（2〜3分）
+### テスト実行（1分）
 
-まずはツールが正常に動くか確認します:
+まずはツールが正常に動くか、3キーワードだけで確認します:
 
 ```
 python ebay_sold_analyzer.py --keywords "parappa rapper,smart doll,anime production cel" --pages 1 --output data/quick_test.csv
 ```
 
-画面に商品データが流れてきたら成功です。
+画面に商品データが流れてきたら成功です。（3キーワード × 1ページ = API 3回消費）
 
-### 本格実行: 自動発掘モード（30〜60分）
+### 本格実行: 自動発掘モード
 
-70個のキーワードで広く探索します。時間がかかるのでPCを開いたまま放置してください:
+70個のキーワードで広く探索します。API回数を使うので、pagesは1で十分:
 
 ```
-python ebay_sold_analyzer.py --discover --pages 2 --output data/full_discovery.csv
+python ebay_sold_analyzer.py --discover --pages 1 --output data/full_discovery.csv
 ```
+
+※ これで約70回APIを使います（無料枠100回のうち70回）
 
 ### 好きなキーワードで検索
 
 自分で考えたキーワードでも検索できます:
 
 ```
-python ebay_sold_analyzer.py --keywords "popee performer,tokyo mew mew,japanese vintage walkman,japanese city pop vinyl" --pages 2 --output data/my_search.csv
+python ebay_sold_analyzer.py --keywords "popee performer,tokyo mew mew,japanese vintage walkman,japanese city pop vinyl" --pages 1 --output data/my_search.csv
 ```
 
 ---
 
-## 手順5: 結果の見方
+## 手順6: 結果の見方
 
 ### 画面に表示される内容
 
@@ -155,8 +187,8 @@ python ebay_sold_analyzer.py --keywords "popee performer,tokyo mew mew,japanese 
 
 `data` フォルダに結果ファイルが保存されます:
 
-- **`full_discovery_summary.csv`** — キーワードごとの集計。Excelで開いて並べ替えると見やすい
-- **`full_discovery_items.csv`** — 売れた商品の全リスト。具体的にどんな商品が売れてるかわかる
+- **`*_summary.csv`** — キーワードごとの集計。Excelで開いて並べ替えると見やすい
+- **`*_items.csv`** — 売れた商品の全リスト。具体的にどんな商品が売れてるかわかる
 
 **CSVをExcelで開く方法:**
 1. ファイルをダブルクリック → Excelで開く
@@ -166,7 +198,7 @@ python ebay_sold_analyzer.py --keywords "popee performer,tokyo mew mew,japanese 
 
 ---
 
-## 手順6: 結果をもとに利益を計算する
+## 手順7: 結果をもとに利益を計算する
 
 有望なキーワードが見つかったら:
 
@@ -192,27 +224,47 @@ python ebay_sold_analyzer.py --keywords "popee performer,tokyo mew mew,japanese 
 
 ---
 
+## API無料枠の使い方のコツ
+
+月100回しか検索できないので、賢く使いましょう:
+
+| やり方 | API消費 | おすすめ度 |
+|--------|---------|-----------|
+| `--discover --pages 1` | 70回 | 初回だけ。全体を把握 |
+| `--keywords "..." --pages 1` | キーワード数 × 1 | 普段はこっち |
+| `--keywords "..." --pages 2` | キーワード数 × 2 | 有望なものだけ深掘り |
+
+**おすすめの流れ:**
+1. 初月: `--discover --pages 1` で全体を把握（70回）→ 残り30回で気になるものを深掘り
+2. 翌月以降: 有望な10〜15キーワードだけ `--pages 2` で追跡（20〜30回/月）
+
+---
+
 ## トラブルシューティング
+
+### 「SerpAPI のAPIキーが必要です」と出る
+
+→ 手順2の `.env` ファイルが正しく設定されていません
+→ `.env.example` をコピーして `.env` にリネームしたか確認
+→ `SERPAPI_KEY=` の後にAPIキーが入っているか確認
 
 ### 「python が見つからない」
 
 → 手順1でPythonインストール時に **「Add python.exe to PATH」のチェックを忘れた**
 → Pythonを再インストール（今度はチェックを入れる）→ PCを再起動
 
-### 「403 Forbidden」エラーが出る
-
-→ eBayがアクセスをブロックしています
-→ **5〜10分待ってから再実行**
-→ VPNを使っている場合は**オフにして**から再実行
-→ それでもダメなら連絡ください（SerpAPI対応に切り替えます）
-
 ### 「ModuleNotFoundError: No module named 'httpx'」
 
-→ 手順3のライブラリインストールをもう一度実行
+→ 手順4のライブラリインストールをもう一度実行
 
-### 途中で止まった / 中断したい
+### 「SerpAPI error: ...」
 
-→ `Ctrl + C` を押すと中断できます。それまでの結果は保存されません。
+→ APIキーが間違っている、または月の無料枠を使い切った可能性
+→ https://serpapi.com/dashboard でAPIキーと残り回数を確認
+
+### 途中で止めたい
+
+→ `Ctrl + C` を押すと中断できます
 
 ---
 
