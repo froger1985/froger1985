@@ -1,0 +1,38 @@
+# sourcing-tool 設定ファイル
+
+# 利益計算の基準
+profit:
+  min_profit_rate: 0.30          # 最低利益率 30%
+  min_ebay_sold_count: 3         # eBayで過去90日に最低3件の販売実績
+  ebay_fee_rate: 0.1325          # eBay最終価値手数料 13.25%
+  payment_fee_rate: 0.029        # 決済手数料 2.9%
+  payment_fee_fixed_usd: 0.30   # 決済固定手数料 $0.30
+
+# 仕入れ上限
+buy_limits:
+  game_max_jpy: 15000            # ゲーム1点の仕入れ上限
+  audio_max_jpy: 50000           # オーディオ1点の仕入れ上限
+
+# スクレイピング設定
+scraping:
+  request_delay_sec: 3           # リクエスト間の待ち時間（秒）
+  max_results_per_search: 50     # 1検索あたりの最大取得件数
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+# 送料の目安（円）
+shipping:
+  game_ems_jpy: 2000             # ゲーム（小型）EMS送料目安
+  audio_small_ems_jpy: 3500      # オーディオ小型 EMS送料目安
+  audio_large_ems_jpy: 7000      # オーディオ大型 EMS送料目安
+
+# 通知設定
+alerts:
+  enabled: true
+  channels:
+    - slack    # slack, line, console から選択
+  # 高額商品（この金額以上）は別途ハイライト通知
+  highlight_profit_jpy: 10000
+
+# データベース
+database:
+  path: "data/sourcing.db"
