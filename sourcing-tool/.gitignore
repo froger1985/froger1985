@@ -1,0 +1,11 @@
+# Keep the data directory and all results
+# (GitHub Actions commits results here)
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Database
+data/*.db
