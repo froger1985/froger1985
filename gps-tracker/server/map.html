@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>子供の位置情報</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif; }
+    #header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: #1a73e8; color: #fff;
+      padding: 10px 16px;
+      display: flex; justify-content: space-between; align-items: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    #header h1 { font-size: 16px; font-weight: 600; }
+    #status { font-size: 12px; opacity: 0.85; }
+    #map { height: 100vh; width: 100%; padding-top: 44px; }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>子供の位置情報</h1>
+    <span id="status">読み込み中...</span>
+  </div>
+  <div id="map"></div>
+
+  <script>
+    var map, markers = {}, infoWindows = {};
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById('map'), {
+        zoom: 15,
+        center: { lat: 35.6762, lng: 139.6503 },
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true
+      });
+      loadLocations();
+      setInterval(loadLocations, 30000); // 30秒ごとに自動更新
+    }
+
+    function loadLocations() {
+      google.script.run
+        .withSuccessHandler(updateMap)
+        .withFailureHandler(function(err) {
+          document.getElementById('status').textContent = 'エラー: ' + err.message;
+        })
+        .getLocationsForMap();
+    }
+
+    function updateMap(data) {
+      if (!data || !data.locations || data.locations.length === 0) {
+        document.getElementById('status').textContent = 'データなし';
+        return;
+      }
+
+      data.locations.forEach(function(loc) {
+        var pos   = { lat: parseFloat(loc.lat), lng: parseFloat(loc.lng) };
+        var label = loc.device || '不明';
+        var ts    = loc.timestamp
+          ? new Date(loc.timestamp).toLocaleString('ja-JP')
+          : '不明';
+        var infoContent = '<b>' + label + '</b><br>最終更新: ' + ts
+          + (loc.satellites > 0 ? '<br>衛星数: ' + loc.satellites : '');
+
+        if (markers[loc.device]) {
+          markers[loc.device].setPosition(pos);
+          infoWindows[loc.device].setContent(infoContent);
+        } else {
+          infoWindows[loc.device] = new google.maps.InfoWindow({ content: infoContent });
+          markers[loc.device] = new google.maps.Marker({
+            position: pos,
+            map: map,
+            title: label,
+            animation: google.maps.Animation.DROP
+          });
+          markers[loc.device].addListener('click', (function(dev) {
+            return function() {
+              infoWindows[dev].open(map, markers[dev]);
+            };
+          })(loc.device));
+        }
+      });
+
+      // デバイスが1台のみの場合は自動センタリング
+      if (data.locations.length === 1) {
+        map.setCenter({
+          lat: parseFloat(data.locations[0].lat),
+          lng: parseFloat(data.locations[0].lng)
+        });
+      }
+
+      document.getElementById('status').textContent =
+        '最終更新: ' + new Date().toLocaleTimeString('ja-JP');
+    }
+  </script>
+  <!-- YOUR_GOOGLE_MAPS_API_KEY を取得したAPIキーに置き換えてください -->
+  <script
+    src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap"
+    async defer>
+  </script>
+</body>
+</html>
