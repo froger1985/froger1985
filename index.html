@@ -2,31 +2,122 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>GTMテストページ</title>
-  <!-- Google Tag Manager -->
-<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-})(window,document,'script','dataLayer','GTM-NG5LV9LH');</script>
-　<!-- End Google Tag Manager -->
-  <script>
-    (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','GTM-NG5LV9LH');
-  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ブロック崩し</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0a1a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Arial', sans-serif;
+      color: #fff;
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 16px;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #00e5ff;
+      text-shadow: 0 0 20px #00e5ff88;
+    }
+
+    #game-container {
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      border: 2px solid #00e5ff44;
+      border-radius: 4px;
+      box-shadow: 0 0 40px #00e5ff22;
+    }
+
+    #hud {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      padding: 8px 4px;
+      font-size: 1rem;
+      letter-spacing: 2px;
+    }
+
+    #hud span {
+      color: #aaa;
+    }
+
+    #hud strong {
+      color: #00e5ff;
+    }
+
+    #message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      background: rgba(10, 10, 26, 0.9);
+      padding: 32px 48px;
+      border-radius: 8px;
+      border: 1px solid #00e5ff44;
+      display: none;
+    }
+
+    #message h2 {
+      font-size: 2rem;
+      color: #00e5ff;
+      margin-bottom: 8px;
+    }
+
+    #message p {
+      color: #aaa;
+      margin-bottom: 20px;
+    }
+
+    #message button {
+      background: #00e5ff;
+      color: #0a0a1a;
+      border: none;
+      padding: 12px 32px;
+      font-size: 1rem;
+      font-weight: bold;
+      letter-spacing: 2px;
+      border-radius: 4px;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: background 0.2s;
+    }
+
+    #message button:hover {
+      background: #80f0ff;
+    }
+  </style>
 </head>
 <body>
-  <!-- Google Tag Manager (noscript) -->
-<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-NG5LV9LH"
-height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-　<!-- End Google Tag Manager (noscript) -->
-  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-NG5LV9LH"
-  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+  <h1>ブロック崩し</h1>
+  <div id="game-container">
+    <div id="hud">
+      <div><span>スコア: </span><strong id="score">0</strong></div>
+      <div><span>レベル: </span><strong id="level">1</strong></div>
+      <div><span>残機: </span><strong id="lives">3</strong></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="message">
+      <h2 id="msg-title"></h2>
+      <p id="msg-body"></p>
+      <button id="msg-btn">スタート</button>
+    </div>
+  </div>
 
-  <h1>予約サイトへの遷移テスト</h1>
-  <a href="https://chre2-kawakami.reserve.ne.jp">予約サイトへ移動</a>
+  <script src="main.js"></script>
 </body>
 </html>
