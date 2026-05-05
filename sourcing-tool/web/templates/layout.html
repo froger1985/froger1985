@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}メルカリ→eBay ソーシングツール{% endblock %}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #232639;
+      --border: #2e3250;
+      --accent: #4f6ef7;
+      --accent2: #7c3aed;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --radius: 8px;
+    }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.6; }
+
+    /* Nav */
+    nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 8px; height: 52px; }
+    nav .brand { font-weight: 700; font-size: 15px; color: var(--accent); margin-right: 16px; text-decoration: none; }
+    nav a { color: var(--muted); text-decoration: none; padding: 6px 12px; border-radius: var(--radius); transition: background .15s, color .15s; }
+    nav a:hover, nav a.active { background: var(--surface2); color: var(--text); }
+
+    /* Layout */
+    .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
+    h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--muted); }
+
+    /* Cards */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .card + .card { margin-top: 16px; }
+
+    /* Stats grid */
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; text-align: center; }
+    .stat .val { font-size: 28px; font-weight: 700; color: var(--accent); }
+    .stat .lbl { font-size: 11px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: .5px; }
+
+    /* Table */
+    .tbl-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: var(--surface2); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+
+    /* Badges */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .badge-buy { background: rgba(34,197,94,.15); color: var(--green); border: 1px solid rgba(34,197,94,.3); }
+    .badge-watch { background: rgba(234,179,8,.15); color: var(--yellow); border: 1px solid rgba(234,179,8,.3); }
+    .badge-game { background: rgba(79,110,247,.15); color: var(--accent); border: 1px solid rgba(79,110,247,.3); }
+    .badge-audio { background: rgba(124,58,237,.15); color: #a78bfa; border: 1px solid rgba(124,58,237,.3); }
+    .badge-mercari { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+
+    /* Profit text */
+    .profit-high { color: var(--green); font-weight: 700; }
+    .profit-med  { color: var(--yellow); font-weight: 600; }
+
+    /* Forms */
+    .form-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    input[type=text], input[type=number], select {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      padding: 7px 10px; border-radius: var(--radius); font-size: 13px;
+    }
+    input[type=text]:focus, input[type=number]:focus, select:focus {
+      outline: none; border-color: var(--accent);
+    }
+
+    /* Buttons */
+    .btn { padding: 7px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: opacity .15s; }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-danger  { background: var(--red); color: #fff; }
+    .btn-ghost   { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+
+    /* Alert */
+    .alert { padding: 10px 16px; border-radius: var(--radius); margin-bottom: 16px; }
+    .alert-success { background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.3); color: var(--green); }
+    .alert-running { background: rgba(79,110,247,.1); border: 1px solid rgba(79,110,247,.3); color: var(--accent); }
+
+    /* Scan log */
+    .log-box { background: #0b0d14; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; font-family: monospace; font-size: 12px; color: #7dd3fc; max-height: 220px; overflow-y: auto; white-space: pre-wrap; }
+
+    /* Title link */
+    a.item-link { color: var(--text); text-decoration: none; }
+    a.item-link:hover { color: var(--accent); text-decoration: underline; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+    .tab { padding: 6px 14px; border-radius: var(--radius); font-size: 13px; cursor: pointer; text-decoration: none; color: var(--muted); background: var(--surface2); }
+    .tab.active { background: var(--accent); color: #fff; }
+
+    /* Calc */
+    .calc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .calc-result { font-size: 32px; font-weight: 700; }
+    .calc-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .calc-row:last-child { border-bottom: none; font-weight: 700; font-size: 15px; }
+
+    @media (max-width: 640px) {
+      .calc-grid { grid-template-columns: 1fr; }
+      nav a span { display: none; }
+    }
+  </style>
+</head>
+<body>
+<nav>
+  <a class="brand" href="/">🛍 Sourcing</a>
+  <a href="/" {% if request.path == '/' %}class="active"{% endif %}>ダッシュボード</a>
+  <a href="/watchlist" {% if request.path.startswith('/watchlist') %}class="active"{% endif %}>ウォッチリスト</a>
+  <a href="/scan" {% if request.path.startswith('/scan') %}class="active"{% endif %}>スキャン</a>
+  <a href="/results" {% if request.path.startswith('/results') %}class="active"{% endif %}>結果一覧</a>
+  <a href="/calculator" {% if request.path.startswith('/calculator') %}class="active"{% endif %}>利益計算</a>
+</nav>
+<div class="container">
+  {% block content %}{% endblock %}
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

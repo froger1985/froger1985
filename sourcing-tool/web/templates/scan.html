@@ -1,0 +1,86 @@
+{% extends "layout.html" %}
+{% block title %}スキャン実行 — Sourcing Tool{% endblock %}
+{% block content %}
+<h1>スキャン実行</h1>
+
+<div class="card" style="margin-bottom:16px">
+  <h2>新規スキャン</h2>
+  {% if scan_state.running %}
+  <div class="alert alert-running">🔄 スキャンが実行中です。完了までお待ちください。</div>
+  {% endif %}
+  <form method="post" action="/scan">
+    <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label>ソース (カンマ区切り、空=全て)</label>
+        <input type="text" name="sources" placeholder="hardoff, yahoo, mercari" style="width:260px">
+      </div>
+      <div class="form-group">
+        <label>カテゴリ</label>
+        <select name="category">
+          <option value="">すべて</option>
+          <option value="game">ゲーム</option>
+          <option value="audio">オーディオ</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" name="dry_run" value="1" style="width:auto"> ドライラン（通知なし）
+        </label>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary" {% if scan_state.running %}disabled{% endif %}>
+      {% if scan_state.running %}実行中…{% else %}スキャン開始{% endif %}
+    </button>
+  </form>
+</div>
+
+<div class="card" id="log-card">
+  <h2>スキャンログ</h2>
+  <div class="log-box" id="log-box">{% if scan_state.log %}{{ scan_state.log | join('\n') }}{% else %}ログなし{% endif %}</div>
+  <div style="margin-top:12px;color:var(--muted);font-size:12px">
+    {% if scan_state.last_completed_at %}最終完了: {{ scan_state.last_completed_at }}{% endif %}
+    {% if scan_state.last_result == 'success' %}<span class="badge badge-buy" style="margin-left:8px">成功</span>{% endif %}
+    {% if scan_state.last_result == 'error' %}<span class="badge" style="background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3);margin-left:8px">エラー</span>{% endif %}
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <h2>ソース説明</h2>
+  <table>
+    <thead><tr><th>ソース名</th><th>サイト</th><th>説明</th></tr></thead>
+    <tbody>
+      <tr><td><code>mercari</code></td><td>メルカリ</td><td>日本最大のフリマアプリ</td></tr>
+      <tr><td><code>hardoff</code></td><td>ハードオフ</td><td>全国チェーンのリサイクルショップ</td></tr>
+      <tr><td><code>yahoo</code></td><td>ヤフオク!</td><td>ヤフーオークション</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var running = {{ 'true' if scan_state.running else 'false' }};
+    if (!running) return;
+
+    function poll() {
+      fetch('/api/scan-status')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var box = document.getElementById('log-box');
+          if (data.log && data.log.length) {
+            box.textContent = data.log.join('\n');
+            box.scrollTop = box.scrollHeight;
+          }
+          if (!data.running) {
+            location.reload();
+          } else {
+            setTimeout(poll, 2000);
+          }
+        })
+        .catch(function() { setTimeout(poll, 4000); });
+    }
+    setTimeout(poll, 2000);
+  })();
+</script>
+{% endblock %}

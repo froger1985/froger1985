@@ -1,0 +1,81 @@
+{% extends "layout.html" %}
+{% block title %}ウォッチリスト — Sourcing Tool{% endblock %}
+{% block content %}
+<h1>ウォッチリスト管理</h1>
+
+<div class="card" style="margin-bottom:16px">
+  <h2>キーワードを追加</h2>
+  <form method="post" action="/watchlist/add">
+    <div class="form-row">
+      <div class="form-group">
+        <label>カテゴリ</label>
+        <select name="category">
+          <option value="game">ゲーム</option>
+          <option value="audio">オーディオ</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1;min-width:200px">
+        <label>キーワード</label>
+        <input type="text" name="keyword" placeholder="例: ファミコン ソフト" required>
+      </div>
+      <div class="form-group">
+        <label>最低利益率 (%)</label>
+        <input type="number" name="min_profit" value="30" min="0" max="100" step="5" style="width:90px">
+      </div>
+      <div class="form-group">
+        <label>仕入れ上限 (円)</label>
+        <input type="number" name="max_price" placeholder="未設定" style="width:110px">
+      </div>
+      <div class="form-group" style="justify-content:flex-end">
+        <button type="submit" class="btn btn-primary">追加</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h2 style="margin:0">登録済みキーワード ({{ items|length }} 件)</h2>
+    <div class="tabs" style="margin:0">
+      <a class="tab {% if not category %}active{% endif %}" href="/watchlist">すべて</a>
+      <a class="tab {% if category == 'game' %}active{% endif %}" href="/watchlist?category=game">ゲーム</a>
+      <a class="tab {% if category == 'audio' %}active{% endif %}" href="/watchlist?category=audio">オーディオ</a>
+    </div>
+  </div>
+  {% if items %}
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>カテゴリ</th>
+          <th>キーワード</th>
+          <th>最低利益率</th>
+          <th>仕入れ上限</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td style="color:var(--muted)">{{ item.id }}</td>
+          <td><span class="badge badge-{{ item.category }}">{{ item.category }}</span></td>
+          <td>{{ item.keyword }}</td>
+          <td>{{ "%.0f"|format(item.min_profit_rate * 100) }}%</td>
+          <td>{% if item.max_buy_price_jpy %}¥{{ "{:,}".format(item.max_buy_price_jpy) }}{% else %}—{% endif %}</td>
+          <td>
+            <form method="post" action="/watchlist/delete/{{ item.id }}" style="display:inline">
+              <button type="submit" class="btn btn-danger" style="padding:4px 10px;font-size:12px"
+                onclick="return confirm('削除しますか？')">削除</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p style="color:var(--muted);padding:24px 0;text-align:center">キーワードがありません。上のフォームから追加してください。</p>
+  {% endif %}
+</div>
+{% endblock %}

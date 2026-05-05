@@ -1,0 +1,63 @@
+{% extends "layout.html" %}
+{% block title %}ダッシュボード — Sourcing Tool{% endblock %}
+{% block content %}
+<h1>ダッシュボード</h1>
+
+{% if scan_running %}
+<div class="alert alert-running">🔄 スキャン実行中です…</div>
+{% endif %}
+
+<div class="stats">
+  <div class="stat"><div class="val">{{ total }}</div><div class="lbl">総リスト数</div></div>
+  <div class="stat"><div class="val">{{ new_count }}</div><div class="lbl">未分析</div></div>
+  <div class="stat"><div class="val">{{ analyses }}</div><div class="lbl">分析済み</div></div>
+  <div class="stat"><div class="val" style="color:var(--green)">{{ buys }}</div><div class="lbl">BUY推奨</div></div>
+  <div class="stat"><div class="val" style="color:var(--yellow)">{{ alerted }}</div><div class="lbl">通知済み</div></div>
+</div>
+
+<div class="card">
+  <h2>🏆 高収益 トップ20</h2>
+  {% if opportunities %}
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>商品名</th>
+          <th>仕入れ</th>
+          <th>eBay均値</th>
+          <th>推定利益</th>
+          <th>利益率</th>
+          <th>販売件数</th>
+          <th>カテゴリ</th>
+          <th>ソース</th>
+          <th>発見日</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in opportunities %}
+        <tr>
+          <td style="max-width:320px">
+            <a class="item-link" href="{{ r['url'] }}" target="_blank" rel="noopener">{{ r['title'][:60] }}{% if r['title']|length > 60 %}…{% endif %}</a>
+          </td>
+          <td>¥{{ "{:,}".format(r['price_jpy']) }}</td>
+          <td>${{ "%.0f"|format(r['ebay_avg_price_usd']) }}</td>
+          <td class="{% if r['estimated_profit_jpy'] >= 10000 %}profit-high{% else %}profit-med{% endif %}">
+            ¥{{ "{:,}".format(r['estimated_profit_jpy']) }}
+          </td>
+          <td>{{ "%.0f"|format(r['profit_rate'] * 100) }}%</td>
+          <td>{{ r['ebay_sold_count'] }}</td>
+          <td><span class="badge badge-{{ r['category'] }}">{{ r['category'] }}</span></td>
+          <td><span class="badge badge-{{ r['source'] }}">{{ r['source'] }}</span></td>
+          <td style="color:var(--muted)">{{ r['found_date'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p style="color:var(--muted);padding:24px 0;text-align:center">
+    まだ分析結果がありません。<a href="/scan" style="color:var(--accent)">スキャンを実行</a>してください。
+  </p>
+  {% endif %}
+</div>
+{% endblock %}
