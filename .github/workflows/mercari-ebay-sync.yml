@@ -1,0 +1,94 @@
+name: Mercari→eBay 在庫・価格同期
+
+# 1日3回（JST 8時・14時・20時）自動実行 + 手動実行対応
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '実行モード'
+        required: true
+        default: 'sync'
+        type: choice
+        options:
+          - sync            # 在庫・価格チェック（通常）
+          - import          # メルカリいいね → eBay新規出品
+          - status          # ダッシュボード表示のみ
+          - dry-run-sync    # syncのドライラン（実際のAPI呼び出しなし）
+      pages:
+        description: 'import時: 取得ページ数（1ページ≈30件）'
+        required: false
+        default: '5'
+  schedule:
+    # UTC 23:00 = JST 08:00
+    - cron: '0 23 * * *'
+    # UTC 05:00 = JST 14:00
+    - cron: '0 5 * * *'
+    # UTC 11:00 = JST 20:00
+    - cron: '0 11 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # DBファイルはリポジトリで管理するためfull historyは不要
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: mercari-ebay/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r mercari-ebay/requirements.txt
+
+      - name: Run sync / import
+        working-directory: mercari-ebay
+        env:
+          MERCARI_SESSION_TOKEN: ${{ secrets.MERCARI_SESSION_TOKEN }}
+          EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
+          EBAY_DEV_ID: ${{ secrets.EBAY_DEV_ID }}
+          EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
+          EBAY_USER_TOKEN: ${{ secrets.EBAY_USER_TOKEN }}
+          EBAY_SELLER_EMAIL: ${{ secrets.EBAY_SELLER_EMAIL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          LINE_NOTIFY_TOKEN: ${{ secrets.LINE_NOTIFY_TOKEN }}
+        run: |
+          MODE="${{ inputs.mode || 'sync' }}"
+          echo "=== 実行モード: $MODE ==="
+
+          if [ "$MODE" = "sync" ]; then
+            python main.py sync
+
+          elif [ "$MODE" = "import" ]; then
+            PAGES="${{ inputs.pages || '5' }}"
+            python main.py import-favorites --pages "$PAGES"
+
+          elif [ "$MODE" = "status" ]; then
+            python main.py status
+
+          elif [ "$MODE" = "dry-run-sync" ]; then
+            python main.py --dry-run sync
+          fi
+
+      - name: Show status after run
+        working-directory: mercari-ebay
+        env:
+          # statusコマンドはDB読み取りのみなので最小限の設定で動作
+          MERCARI_SESSION_TOKEN: ${{ secrets.MERCARI_SESSION_TOKEN }}
+        run: python main.py status || true
+
+      - name: Commit DB changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add mercari-ebay/data/
+          git diff --staged --quiet || git commit -m "Auto: mercari-ebay sync $(date '+%Y-%m-%d %H:%M UTC')"
+          git push

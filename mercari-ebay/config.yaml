@@ -1,0 +1,87 @@
+# ============================================================
+# mercari-ebay 自動出品・在庫同期 設定ファイル
+# ============================================================
+
+# eBay出品価格の計算設定
+pricing:
+  # メルカリ価格に対するマークアップ率（利益確保）
+  markup_rate: 0.35          # 35% 上乗せ
+  # eBay手数料（最終価値手数料）
+  ebay_fee_rate: 0.1325      # 13.25%
+  # 最低eBay出品価格（USD）
+  min_ebay_price_usd: 5.0
+  # 国際送料（USD）- eBay出品時の送料設定
+  shipping_cost_usd: 15.0    # EMS/ePacketの目安
+  # 価格変更通知のしきい値（元価格からの変動率）
+  notify_price_change_threshold: 0.05  # 5%以上の変動で通知
+
+# メルカリ商品状態 → eBay ConditionID マッピング
+# eBay条件ID: 1000=New, 1500=NewOther, 3000=Used, 4000=VeryGood, 5000=Good, 6000=Acceptable, 7000=ForParts
+condition_map:
+  "新品、未使用": 1000
+  "未使用に近い": 1500
+  "目立った傷や汚れなし": 4000
+  "やや傷や汚れあり": 5000
+  "傷や汚れあり": 6000
+  "全体的に状態が悪い": 7000
+
+# デフォルトeBayカテゴリID（未設定・マッピング不明時のフォールバック）
+# 一般的なカテゴリ: 99 = Everything Else
+ebay_default_category_id: "99"
+
+# eBayサイト設定
+ebay:
+  site_id: 0                 # 0 = eBay US
+  marketplace_id: "EBAY_US"
+  country: "JP"              # 出品者の国
+  currency: "USD"
+  dispatch_time_max: 7       # 発送まで最大7日
+  listing_duration: "GTC"    # Good Till Cancelled
+  # 配送先
+  ship_to_locations:
+    - "US"
+    - "CA"
+    - "AU"
+    - "GB"
+    - "DE"
+    - "FR"
+    - "JP"
+
+# 在庫・価格チェック設定
+sync:
+  # メルカリリクエスト間の待ち時間（秒）- サーバー負荷軽減
+  request_delay_sec: 2.0
+  # 1バッチあたりの最大チェック件数
+  batch_size: 50
+
+# 通知設定
+notifications:
+  enabled: true
+  channels:              # 使用するチャンネルを列挙 (slack, line, console)
+    - slack
+    - line
+  # 以下のイベントで通知
+  notify_on:
+    sold_out: true       # メルカリ売切れ → eBay停止
+    price_drop: true     # メルカリ値下げ → eBay値下げ
+    price_rise: true     # メルカリ値上げ → eBay値上げ
+    listing_error: true  # eBay出品エラー
+    sync_summary: false  # 毎回のsync完了サマリー（多すぎるのでデフォルトOFF）
+
+# eBay出品時のデフォルト説明文テンプレート
+description_template: |
+  Item shipped directly from Japan via international shipping (EMS/ePacket).
+
+  Condition: {condition}
+  Original listing: {mercari_url}
+
+  Please note:
+  - International shipping typically takes 7-14 business days
+  - We ship from Japan, please check import regulations for your country
+  - All items are authentic and sourced locally in Japan
+
+  Thank you for shopping with us!
+
+# データベース
+database:
+  path: "data/mercari_ebay.db"
