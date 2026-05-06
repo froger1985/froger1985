@@ -9,7 +9,7 @@ from src.db.models import SourceListing
 logger = logging.getLogger(__name__)
 
 WEB_BASE = "https://jp.mercari.com/item"
-LIKES_PAGE = "https://jp.mercari.com/mypage/likes"
+LIKES_PAGE = "https://jp.mercari.com/mypage/favorites"
 SESSION_FILE = Path("data/mercari_session.json")
 SCROLL_PAUSE_MS = 2500
 
@@ -77,7 +77,7 @@ class MercariLikesScraper:
                     return []
 
             # Re-navigate to likes page if user ended up elsewhere after login
-            if "mypage/likes" not in page.url:
+            if "mypage/favorites" not in page.url:
                 print("いいねページに戻ります...")
                 await page.goto(LIKES_PAGE, wait_until="domcontentloaded")
                 await page.wait_for_timeout(3000)
