@@ -3,91 +3,112 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
+from pathlib import Path
 
-import httpx
+from playwright.async_api import BrowserContext, async_playwright
 
 from src.config import CONFIG
 
 logger = logging.getLogger(__name__)
 
 ITEM_URL = "https://jp.mercari.com/item/{item_id}"
-NEXT_DATA_RE = re.compile(
-    r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
-    re.DOTALL,
-)
+SESSION_FILE = Path("data/mercari_session.json")
 
 
 class MercariItemFetcher:
-    """Fetches individual Mercari item details from public item pages.
+    """Fetches individual Mercari item details via Playwright API interception.
 
-    Parses the __NEXT_DATA__ JSON embedded in each item's HTML page.
-    No authentication required — item pages are publicly accessible.
+    Navigates to each item page and intercepts the internal API call that
+    returns item details (condition, description, images, stock_state).
+    Reuses a single browser context across all items for efficiency.
     """
 
     def __init__(self):
-        cfg = CONFIG["scraping"]
-        self.delay = cfg["request_delay_sec"]
-        self.client = httpx.AsyncClient(
-            headers={
-                "User-Agent": cfg["user_agent"],
-                "Accept-Language": "ja-JP,ja;q=0.9",
-            },
-            timeout=30.0,
-            follow_redirects=True,
-        )
+        self.delay = CONFIG["scraping"]["request_delay_sec"]
+        self._pw = None
+        self._browser = None
+        self._context: BrowserContext | None = None
+
+    async def _ensure_context(self):
+        if self._context:
+            return
+        self._pw = await async_playwright().start()
+        self._browser = await self._pw.chromium.launch(headless=True)
+        kwargs: dict = {"user_agent": CONFIG["scraping"]["user_agent"]}
+        if SESSION_FILE.exists():
+            kwargs["storage_state"] = str(SESSION_FILE)
+        self._context = await self._browser.new_context(**kwargs)
 
     async def close(self):
-        await self.client.aclose()
+        if self._context:
+            await self._context.close()
+        if self._browser:
+            await self._browser.close()
+        if self._pw:
+            await self._pw.stop()
 
     async def fetch_details(self, item_id: str) -> dict | None:
-        """Fetch and parse item details. Returns dict with condition/description/images/stock_state."""
+        """Fetch item details by intercepting the API response on the item page."""
         await asyncio.sleep(self.delay)
+        await self._ensure_context()
+
+        result: dict | None = None
+        found = asyncio.Event()
+        api_urls: list[str] = []
+
+        page = await self._context.new_page()
+
+        async def on_response(response):
+            nonlocal result
+            url = response.url
+            if "api.mercari.jp" not in url:
+                return
+            api_urls.append(url)
+            if response.status != 200:
+                return
+            try:
+                data = await response.json()
+                parsed = self._try_parse(data, item_id)
+                if parsed and not found.is_set():
+                    result = parsed
+                    found.set()
+            except Exception:
+                pass
+
+        page.on("response", on_response)
+
         try:
-            resp = await self.client.get(ITEM_URL.format(item_id=item_id))
-            resp.raise_for_status()
-            return self._parse_html(resp.text, item_id)
+            await page.goto(
+                ITEM_URL.format(item_id=item_id),
+                wait_until="domcontentloaded",
+                timeout=30000,
+            )
+            try:
+                await asyncio.wait_for(found.wait(), timeout=15.0)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "No item data found for %s. API URLs intercepted: %s",
+                    item_id, api_urls[:10],
+                )
         except Exception:
             logger.warning("Failed to fetch item %s", item_id, exc_info=True)
-            return None
+        finally:
+            await page.close()
 
-    def _parse_html(self, html: str, item_id: str) -> dict | None:
-        match = NEXT_DATA_RE.search(html)
-        if not match:
-            # Debug: show what script tags and data patterns exist
-            scripts = re.findall(r'<script[^>]*id="([^"]*)"', html)
-            has_nuxt = "__NUXT_DATA__" in html or "__NUXT__" in html
-            has_state = "window.__INITIAL_STATE__" in html or "window.__STATE__" in html
-            print(f"  [DEBUG] script ids: {scripts[:10]}")
-            print(f"  [DEBUG] nuxt={has_nuxt}, initial_state={has_state}")
-            print(f"  [DEBUG] HTML先頭200文字: {html[:200]!r}")
-            logger.warning("No __NEXT_DATA__ found for item %s", item_id)
-            return None
-        try:
-            data = json.loads(match.group(1))
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse __NEXT_DATA__ for item %s", item_id)
-            return None
-        return self._extract(data, item_id)
+        return result
 
-    def _extract(self, data: dict, item_id: str) -> dict:
-        # Navigate to item object — try common Next.js page prop locations
-        page_props = data.get("props", {}).get("pageProps", {})
-        item = (
-            page_props.get("item")
-            or page_props.get("product")
-            or page_props.get("itemData")
-            or {}
-        )
-
-        if not item:
-            logger.warning("Could not find item data in __NEXT_DATA__ for %s (keys: %s)",
-                           item_id, list(page_props.keys()))
+    def _try_parse(self, data: dict, item_id: str) -> dict | None:
+        item = data.get("item") or data.get("data") or data
+        if not isinstance(item, dict):
+            return None
 
         condition = self._get_condition(item)
         description = item.get("description") or item.get("itemDescription") or ""
         images = self._get_images(item)
         stock_state = self._get_stock_state(item)
+
+        if not any([condition, description, images, stock_state]):
+            return None
 
         return {
             "condition": condition,
