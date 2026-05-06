@@ -13,7 +13,7 @@
     {% block header_right %}{% endblock %}
   </div>
 </header>
-<main class="max-w-2xl mx-auto px-4 py-4 pb-28">
+<main class="{% block main_class %}max-w-2xl mx-auto px-4 py-4 pb-28{% endblock %}">
   {% block content %}{% endblock %}
 </main>
 </body>

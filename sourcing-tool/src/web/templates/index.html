@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% block main_class %}p-0{% endblock %}
+
 {% block header_right %}
   {% if not configured %}
     <span class="text-xs text-red-500">⚠ EBAY_RUNAME未設定</span>
@@ -12,95 +14,128 @@
 {% endblock %}
 
 {% block content %}
-{% if auth_msg == 'ok' %}
-<div class="bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-sm text-green-700 mb-3">
-  eBay認証が完了しました。
-</div>
-{% elif auth_msg == 'error' %}
-<div class="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 mb-3">
-  eBay認証に失敗しました。再度お試しください。
-</div>
-{% endif %}
+<div id="appContainer" class="flex flex-col" style="height:calc(100dvh - 52px)">
 
-<!-- Filter tabs -->
-<div class="flex gap-1 bg-gray-200 rounded-xl p-1 mb-4 text-sm">
-  <a href="/?tab=active"
-     class="flex-1 text-center py-2 rounded-lg transition
-            {% if tab=='active' %}bg-white shadow font-semibold{% else %}text-gray-500{% endif %}">
-    未出品 <span class="{% if tab=='active' %}text-blue-500{% endif %}font-bold">{{ counts.active }}</span>
-  </a>
-  <a href="/?tab=listed"
-     class="flex-1 text-center py-2 rounded-lg transition
-            {% if tab=='listed' %}bg-white shadow font-semibold{% else %}text-gray-500{% endif %}">
-    出品済 <span class="{% if tab=='listed' %}text-green-500{% endif %}font-bold">{{ counts.listed }}</span>
-  </a>
-  <a href="/?tab=sold"
-     class="flex-1 text-center py-2 rounded-lg transition
-            {% if tab=='sold' %}bg-white shadow font-semibold{% else %}text-gray-500{% endif %}">
-    売切れ <span class="text-gray-400 font-bold">{{ counts.sold }}</span>
-  </a>
-</div>
-
-<!-- Item list -->
-<form id="listForm" method="post" action="/list">
-{% if listings %}
-<div class="space-y-2">
-{% for l in listings %}
-<div class="bg-white rounded-xl shadow-sm p-3 flex gap-3 items-center">
-  {% if tab == 'active' %}
-  <input type="checkbox" name="item_ids" value="{{ l.id }}"
-         class="item-check w-5 h-5 rounded border-gray-300 text-blue-600 flex-shrink-0"
-         onchange="updateBar()">
+  {% if auth_msg == 'ok' %}
+  <div id="authMsg" class="flex-shrink-0 bg-green-50 border-b border-green-200 px-4 py-2 text-sm text-green-700 flex justify-between items-center">
+    eBay認証が完了しました。
+    <button onclick="document.getElementById('authMsg').remove()" class="text-green-400 ml-2">✕</button>
+  </div>
+  {% elif auth_msg == 'error' %}
+  <div id="authMsg" class="flex-shrink-0 bg-red-50 border-b border-red-200 px-4 py-2 text-sm text-red-700 flex justify-between items-center">
+    eBay認証に失敗しました。<a href="/debug/auth-url" target="_blank" class="underline ml-1">原因を確認</a>
+    <button onclick="document.getElementById('authMsg').remove()" class="text-red-400 ml-2">✕</button>
+  </div>
   {% endif %}
-  <img src="{{ l.image_url }}" class="w-16 h-16 object-cover rounded-lg flex-shrink-0 bg-gray-100"
-       onerror="this.style.display='none'">
-  <div class="flex-1 min-w-0">
-    <p class="text-sm font-medium leading-snug line-clamp-2 text-gray-800">
-      {{ l.listing_title or l.title }}
-    </p>
-    <div class="mt-1 flex items-center gap-1.5 flex-wrap">
-      <span class="text-xs text-gray-400">¥{{ "{:,}".format(l.price_jpy) }}</span>
-      <span class="text-gray-300">→</span>
-      <span class="text-sm font-bold text-blue-600">${{ "%.2f"|format(l.ebay_price_usd or 0) }}</span>
-    </div>
-    <div class="mt-1 flex items-center gap-1 flex-wrap">
-      <span class="text-xs px-1.5 py-0.5 rounded-full
-        {% if l.ebay_condition_id == 1000 %}bg-blue-50 text-blue-600
-        {% elif l.ebay_condition_id == 1500 %}bg-cyan-50 text-cyan-600
-        {% elif l.ebay_condition_id == 3000 %}bg-green-50 text-green-700
-        {% elif l.ebay_condition_id == 4000 %}bg-yellow-50 text-yellow-700
-        {% else %}bg-gray-100 text-gray-500{% endif %}">
-        {{ l.condition }}
-      </span>
-      {% if not l.listing_category_id and tab == 'active' %}
-      <span class="text-xs text-orange-500">カテゴリ未設定</span>
-      {% endif %}
-      {% if tab == 'listed' and l.ebay_listing_id %}
-      <span class="text-xs text-green-600">出品ID: {{ l.ebay_listing_id }}</span>
-      {% endif %}
+
+  <!-- Tabs -->
+  <div class="flex-shrink-0 bg-gray-100 px-3 pt-2 pb-2">
+    <div class="flex gap-1 bg-gray-200 rounded-xl p-1 text-sm">
+      <a href="/?tab=active"
+         class="flex-1 text-center py-2 rounded-lg transition
+                {% if tab=='active' %}bg-white shadow font-semibold{% else %}text-gray-500{% endif %}">
+        未出品 <span class="{% if tab=='active' %}text-blue-500{% endif %}font-bold">{{ counts.active }}</span>
+      </a>
+      <a href="/?tab=listed"
+         class="flex-1 text-center py-2 rounded-lg transition
+                {% if tab=='listed' %}bg-white shadow font-semibold{% else %}text-gray-500{% endif %}">
+        出品済 <span class="{% if tab=='listed' %}text-green-500{% endif %}font-bold">{{ counts.listed }}</span>
+      </a>
+      <a href="/?tab=sold"
+         class="flex-1 text-center py-2 rounded-lg transition
+                {% if tab=='sold' %}bg-white shadow font-semibold{% else %}text-gray-500{% endif %}">
+        売切れ <span class="text-gray-400 font-bold">{{ counts.sold }}</span>
+      </a>
     </div>
   </div>
-  {% if tab != 'listed' %}
-  <a href="/item/{{ l.id }}/edit"
-     class="text-xs text-blue-500 border border-blue-200 px-3 py-1.5 rounded-lg flex-shrink-0">
-    編集
-  </a>
-  {% endif %}
-</div>
-{% endfor %}
-</div>
-{% else %}
-<div class="text-center py-20 text-gray-400">
-  <p class="text-6xl mb-4">📦</p>
-  <p class="text-sm">商品がありません</p>
-</div>
-{% endif %}
-</form>
 
-<!-- Sticky bottom action bar -->
+  <!-- Two-panel area -->
+  <div class="flex flex-1 min-h-0">
+
+    <!-- Left: item list -->
+    <form id="listForm" method="post" action="/list"
+          class="w-full md:w-96 md:flex-shrink-0 overflow-y-auto bg-gray-50 md:border-r md:border-gray-200">
+      {% if listings %}
+      <div class="space-y-2 p-3">
+        {% for l in listings %}
+        <div class="bg-white rounded-xl shadow-sm p-3 flex gap-2 items-center cursor-pointer
+                    border border-transparent hover:border-blue-300 transition-colors item-card"
+             id="item-{{ l.id }}"
+             onclick="selectItem({{ l.id }}, this)">
+          {% if tab == 'active' %}
+          <input type="checkbox" name="item_ids" value="{{ l.id }}"
+                 class="item-check w-5 h-5 rounded border-gray-300 text-blue-600 flex-shrink-0"
+                 onclick="event.stopPropagation()"
+                 onchange="updateBar()">
+          {% endif %}
+          <img src="{{ l.image_url }}" class="w-14 h-14 object-cover rounded-lg flex-shrink-0 bg-gray-100"
+               onerror="this.style.display='none'">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium leading-snug line-clamp-2 text-gray-800 item-title">
+              {{ l.listing_title or l.title }}
+            </p>
+            <div class="mt-1 flex items-center gap-1.5">
+              <span class="text-xs text-gray-400">¥{{ "{:,}".format(l.price_jpy) }}</span>
+              <span class="text-gray-300 text-xs">→</span>
+              <span class="text-sm font-bold text-blue-600 item-price">${{ "%.2f"|format(l.ebay_price_usd or 0) }}</span>
+            </div>
+            <div class="mt-1 flex items-center gap-1 flex-wrap">
+              {% if l.ebay_condition_id %}
+              <span class="text-xs px-1.5 py-0.5 rounded-full
+                {% if l.ebay_condition_id == 1000 %}bg-blue-50 text-blue-600
+                {% elif l.ebay_condition_id == 1500 %}bg-cyan-50 text-cyan-600
+                {% elif l.ebay_condition_id == 3000 %}bg-green-50 text-green-700
+                {% elif l.ebay_condition_id == 4000 %}bg-yellow-50 text-yellow-700
+                {% else %}bg-gray-100 text-gray-500{% endif %}">
+                {{ l.condition }}
+              </span>
+              {% endif %}
+              {% if not l.listing_category_id and tab == 'active' %}
+              <span class="text-xs text-orange-500">カテゴリ未設定</span>
+              {% endif %}
+              {% if tab == 'listed' and l.ebay_listing_id %}
+              <span class="text-xs text-green-600 truncate max-w-24">{{ l.ebay_listing_id }}</span>
+              {% endif %}
+            </div>
+          </div>
+          <span class="text-gray-300 flex-shrink-0 text-lg">›</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="flex flex-col items-center justify-center h-full py-20 text-gray-400">
+        <p class="text-5xl mb-4">📦</p>
+        <p class="text-sm">商品がありません</p>
+      </div>
+      {% endif %}
+    </form>
+
+    <!-- Right: edit pane (desktop) -->
+    <div id="editPane" class="hidden md:flex flex-col flex-1 overflow-y-auto bg-gray-50">
+      <div id="editPlaceholder" class="flex flex-col items-center justify-center flex-1 text-gray-300 select-none pointer-events-none">
+        <p class="text-5xl mb-3 opacity-40">←</p>
+        <p class="text-sm">商品を選択して編集</p>
+      </div>
+      <div id="editContent" class="hidden p-4 pb-24"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Mobile overlay -->
+<div id="mobileOverlay" class="fixed inset-0 z-30 bg-white overflow-y-auto hidden">
+  <div class="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 z-10 shadow-sm">
+    <button type="button" onclick="closeOverlay()"
+            class="text-blue-500 text-sm font-medium flex-shrink-0">← 戻る</button>
+    <span id="overlayTitle" class="text-sm font-semibold text-gray-700 truncate flex-1"></span>
+  </div>
+  <div id="mobileEditContent" class="p-4 pb-24"></div>
+</div>
+
+<!-- Action bar (bulk listing) -->
 {% if tab == 'active' %}
-<div id="actionBar" class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-xl px-4 py-4 hidden z-10">
-  <div class="max-w-2xl mx-auto flex items-center justify-between gap-3">
+<div id="actionBar" class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-xl px-4 py-4 hidden z-20">
+  <div class="max-w-screen-xl mx-auto flex items-center justify-between gap-3">
     <div class="text-sm text-gray-600">
       <span id="checkCount" class="font-bold text-blue-600">0</span>件選択中
     </div>
@@ -113,6 +148,7 @@
 {% endif %}
 
 <script>
+// ---- List ----
 function updateBar() {
   const n = document.querySelectorAll('.item-check:checked').length;
   const bar = document.getElementById('actionBar');
@@ -126,6 +162,289 @@ function submitList() {
   if (n === 0) return;
   if (!confirm(n + '件をeBayに出品しますか？')) return;
   document.getElementById('listForm').submit();
+}
+
+// ---- Item selection ----
+let currentItemId = null;
+
+async function selectItem(id, cardEl) {
+  document.querySelectorAll('.item-card').forEach(c => {
+    c.classList.remove('border-blue-400', 'bg-blue-50');
+    c.classList.add('border-transparent');
+  });
+  cardEl.classList.remove('border-transparent');
+  cardEl.classList.add('border-blue-400', 'bg-blue-50');
+  currentItemId = id;
+
+  const title = cardEl.querySelector('.item-title')?.textContent?.trim() || '';
+  const loading = '<div class="flex justify-center items-center py-16 text-gray-400 text-sm">読み込み中...</div>';
+  const isMobile = window.innerWidth < 768;
+
+  if (isMobile) {
+    document.getElementById('mobileOverlay').classList.remove('hidden');
+    document.getElementById('overlayTitle').textContent = title;
+    document.getElementById('mobileEditContent').innerHTML = loading;
+  } else {
+    document.getElementById('editPlaceholder').classList.add('hidden');
+    const content = document.getElementById('editContent');
+    content.classList.remove('hidden');
+    content.innerHTML = loading;
+    document.getElementById('editPane').scrollTop = 0;
+  }
+
+  try {
+    const resp = await fetch('/api/item/' + id);
+    if (!resp.ok) throw new Error('fetch failed');
+    const data = await resp.json();
+    const html = renderEditForm(data);
+    if (isMobile) {
+      document.getElementById('mobileEditContent').innerHTML = html;
+    } else {
+      document.getElementById('editContent').innerHTML = html;
+    }
+    initEditForm();
+  } catch (e) {
+    const err = '<div class="text-center py-10 text-red-500 text-sm">読み込みに失敗しました</div>';
+    if (isMobile) {
+      document.getElementById('mobileEditContent').innerHTML = err;
+    } else {
+      document.getElementById('editContent').innerHTML = err;
+    }
+  }
+}
+
+function closeOverlay() {
+  document.getElementById('mobileOverlay').classList.add('hidden');
+  document.querySelectorAll('.item-card').forEach(c => {
+    c.classList.remove('border-blue-400', 'bg-blue-50');
+    c.classList.add('border-transparent');
+  });
+  currentItemId = null;
+}
+
+// ---- Edit form ----
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderEditForm(data) {
+  const CONDITIONS = [
+    [1000,'新品、未使用','New'],
+    [1500,'未使用に近い','New other'],
+    [3000,'目立った傷や汚れなし','Very Good'],
+    [4000,'やや傷や汚れあり','Good'],
+    [5000,'傷や汚れあり','Acceptable'],
+    [7000,'全体的に状態が悪い','For parts'],
+  ];
+  const condOpts = CONDITIONS.map(([cid, jp, en]) =>
+    `<option value="${cid}"${data.ebay_condition_id == cid ? ' selected' : ''}>${esc(jp)} (${en})</option>`
+  ).join('');
+
+  const imgs = (data.images || []).length
+    ? `<div class="flex gap-2 overflow-x-auto pb-2 mb-4">${
+        data.images.map(img => `<img src="${esc(img)}" class="h-24 w-24 object-cover rounded-xl flex-shrink-0 bg-gray-100" onerror="this.style.display='none'">`).join('')
+      }</div>`
+    : '';
+
+  const catStatus = data.listing_category_id
+    ? `<span class="text-xs text-green-600 mt-1 block" id="ef_cat_selected">選択中: ID ${esc(data.listing_category_id)}</span>`
+    : `<span class="text-xs text-orange-500 mt-1 block" id="ef_cat_selected">未設定（出品前に設定してください）</span>`;
+
+  const mercariLink = data.url
+    ? `<div class="mb-3"><a href="${esc(data.url)}" target="_blank" rel="noopener" class="text-xs text-blue-500 underline">メルカリで確認 ↗</a></div>`
+    : '';
+
+  return `<form id="editForm">
+    ${imgs}
+    ${mercariLink}
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-3">
+      <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">タイトル（eBay · 80文字以内）</label>
+      <textarea name="title" id="ef_title" rows="2" maxlength="80"
+                class="w-full mt-2 text-sm border-0 focus:ring-0 resize-none leading-relaxed outline-none"
+                oninput="efCharCount()">${esc(data.listing_title)}</textarea>
+      <div class="flex justify-end mt-1">
+        <span id="ef_charCount" class="text-xs text-gray-400">0 / 80</span>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-3">
+      <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">価格設定</label>
+      <input type="hidden" id="ef_price_jpy" value="${data.price_jpy}">
+      <input type="hidden" id="ef_rate" value="${data.rate}">
+      <input type="hidden" name="ebay_price_usd" id="ef_price_hidden" value="${data.ebay_price_usd}">
+      <div class="flex items-end justify-between mt-3 mb-4">
+        <div>
+          <p class="text-xs text-gray-400">仕入れ価格</p>
+          <p class="text-lg font-bold text-gray-700">¥${data.price_jpy.toLocaleString('ja-JP')}</p>
+        </div>
+        <div class="text-xl text-gray-300">→</div>
+        <div class="text-right">
+          <p class="text-xs text-gray-400">eBay出品価格</p>
+          <p class="text-2xl font-bold text-blue-600" id="ef_calc_price">$${data.ebay_price_usd.toFixed(2)}</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-gray-500">国際送料 (USD)</label>
+          <div class="flex items-center border rounded-lg px-3 py-2 mt-1 bg-gray-50">
+            <span class="text-gray-400 text-sm mr-1">$</span>
+            <input type="number" name="shipping_usd" id="ef_shipping"
+                   step="0.5" min="0" value="${data.shipping}"
+                   class="flex-1 bg-transparent text-sm border-0 focus:ring-0 p-0 outline-none"
+                   oninput="efRecalc()">
+          </div>
+          <p class="text-xs text-gray-400 mt-1">デフォルト: $${data.default_shipping}</p>
+        </div>
+        <div>
+          <label class="text-xs text-gray-500">利益マージン</label>
+          <div class="flex items-center border rounded-lg px-3 py-2 mt-1 bg-gray-50">
+            <input type="number" name="margin_pct" id="ef_margin"
+                   step="1" min="0" max="200" value="${data.margin_pct}"
+                   class="flex-1 bg-transparent text-sm border-0 focus:ring-0 p-0 outline-none"
+                   oninput="efRecalc()">
+            <span class="text-gray-400 text-sm ml-1">%</span>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">デフォルト: ${data.default_margin_pct}%</p>
+        </div>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-3">
+      <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">コンディション</label>
+      <select name="condition_id" class="w-full mt-2 text-sm border border-gray-200 rounded-lg p-2.5 bg-gray-50">
+        ${condOpts}
+      </select>
+      <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-4 block">eBayカテゴリ</label>
+      <input type="text" id="ef_cat_search" placeholder="日本語または英語でカテゴリを検索..."
+             class="w-full mt-2 text-sm border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+             autocomplete="off">
+      <input type="hidden" name="category_id" id="ef_cat_id" value="${esc(data.listing_category_id)}">
+      ${catStatus}
+      <div id="ef_cat_results" class="mt-1 border border-gray-200 rounded-lg overflow-hidden hidden bg-white relative z-10"></div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+      <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">商品説明</label>
+      <textarea name="description" rows="6"
+                class="w-full mt-2 text-sm border border-gray-200 rounded-lg p-3 resize-none bg-gray-50 leading-relaxed outline-none">${esc(data.listing_description)}</textarea>
+    </div>
+    <button type="button" id="ef_save_btn" onclick="saveCurrentItem()"
+            class="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold text-base shadow mb-2">
+      保存する
+    </button>
+  </form>`;
+}
+
+function initEditForm() {
+  efCharCount();
+  const catInput = document.getElementById('ef_cat_search');
+  if (!catInput) return;
+  let catTimer;
+  catInput.addEventListener('input', function() {
+    clearTimeout(catTimer);
+    const q = this.value.trim();
+    const box = document.getElementById('ef_cat_results');
+    if (q.length < 2) { box.classList.add('hidden'); return; }
+    catTimer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/categories?q=' + encodeURIComponent(q));
+        const data = await res.json();
+        if (!data.length) { box.classList.add('hidden'); return; }
+        box.innerHTML = data.map(c =>
+          `<button type="button"
+                   data-id="${esc(c.id)}" data-name="${esc(c.name)}"
+                   onclick="efSelectCat(this.dataset.id, this.dataset.name)"
+                   class="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 border-b last:border-0">
+             ${esc(c.name)} <span class="text-gray-400 text-xs">#${esc(c.id)}</span>
+           </button>`
+        ).join('');
+        box.classList.remove('hidden');
+      } catch(e) {}
+    }, 400);
+  });
+}
+
+function efCharCount() {
+  const el = document.getElementById('ef_title');
+  if (!el) return;
+  const n = el.value.length;
+  const counter = document.getElementById('ef_charCount');
+  if (!counter) return;
+  counter.textContent = n + ' / 80';
+  counter.className = 'text-xs ' + (n > 70 ? 'text-orange-500 font-semibold' : 'text-gray-400');
+}
+
+function efRecalc() {
+  const pjpy = parseFloat(document.getElementById('ef_price_jpy')?.value) || 0;
+  const rate = parseFloat(document.getElementById('ef_rate')?.value) || 150;
+  const ship = parseFloat(document.getElementById('ef_shipping')?.value) || 0;
+  const margin = (parseFloat(document.getElementById('ef_margin')?.value) || 0) / 100;
+  const cost = pjpy / rate + ship;
+  const raw = (cost * (1 + margin) + 0.30) / (1 - 0.1325 - 0.029);
+  const final = Math.floor(raw) + 0.99;
+  const priceEl = document.getElementById('ef_calc_price');
+  const hidEl = document.getElementById('ef_price_hidden');
+  if (priceEl) priceEl.textContent = '$' + final.toFixed(2);
+  if (hidEl) hidEl.value = final.toFixed(2);
+}
+
+function efSelectCat(id, name) {
+  const idEl = document.getElementById('ef_cat_id');
+  const searchEl = document.getElementById('ef_cat_search');
+  const selEl = document.getElementById('ef_cat_selected');
+  const resultsEl = document.getElementById('ef_cat_results');
+  if (idEl) idEl.value = id;
+  if (searchEl) searchEl.value = name;
+  if (selEl) {
+    selEl.textContent = '選択中: ' + name + ' (#' + id + ')';
+    selEl.className = 'text-xs text-green-600 mt-1 block';
+  }
+  if (resultsEl) resultsEl.classList.add('hidden');
+}
+
+async function saveCurrentItem() {
+  if (!currentItemId) return;
+  const form = document.getElementById('editForm');
+  if (!form) return;
+  const btn = document.getElementById('ef_save_btn');
+  btn.textContent = '保存中...';
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/item/' + currentItemId + '/save', {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      body: new FormData(form),
+    });
+    if (resp.ok) {
+      showToast('保存しました');
+      const fd = new FormData(form);
+      const card = document.getElementById('item-' + currentItemId);
+      if (card) {
+        const titleVal = fd.get('title');
+        const priceVal = fd.get('ebay_price_usd');
+        if (titleVal) { const el = card.querySelector('.item-title'); if (el) el.textContent = titleVal; }
+        if (priceVal) { const el = card.querySelector('.item-price'); if (el) el.textContent = '$' + parseFloat(priceVal).toFixed(2); }
+      }
+    } else {
+      showToast('保存に失敗しました', 'error');
+    }
+  } catch(e) {
+    showToast('保存に失敗しました', 'error');
+  }
+  btn.textContent = '保存する';
+  btn.disabled = false;
+}
+
+function showToast(msg, type = 'success') {
+  document.querySelector('.toast-msg')?.remove();
+  const t = document.createElement('div');
+  t.className = 'toast-msg fixed bottom-20 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-full text-sm font-medium shadow-lg z-50 ' +
+    (type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => {
+    t.style.transition = 'opacity 0.3s';
+    t.style.opacity = '0';
+    setTimeout(() => t.remove(), 300);
+  }, 2000);
 }
 </script>
 {% endblock %}

@@ -13,8 +13,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 TOKEN_FILE = Path("data/ebay_token.json")
-AUTH_URL = "https://auth.ebay.com/oauth2/authorize"
-TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
+_PROD_AUTH_URL = "https://auth.ebay.com/oauth2/authorize"
+_PROD_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
+_SBX_AUTH_URL = "https://auth.sandbox.ebay.com/oauth2/authorize"
+_SBX_TOKEN_URL = "https://api.sandbox.ebay.com/identity/v1/oauth2/token"
 SCOPES = " ".join([
     "https://api.ebay.com/oauth/api_scope",
     "https://api.ebay.com/oauth/api_scope/sell.inventory",
@@ -27,6 +29,9 @@ class EbayAuth:
         self.client_id = os.getenv("EBAY_CLIENT_ID", "")
         self.client_secret = os.getenv("EBAY_CLIENT_SECRET", "")
         self.runame = os.getenv("EBAY_RUNAME", "")
+        self.is_sandbox = "SBX" in self.client_id.upper()
+        self._auth_url = _SBX_AUTH_URL if self.is_sandbox else _PROD_AUTH_URL
+        self._token_url = _SBX_TOKEN_URL if self.is_sandbox else _PROD_TOKEN_URL
         self._token: dict = {}
         self._load_token()
 
@@ -48,7 +53,7 @@ class EbayAuth:
             "response_type": "code",
             "scope": SCOPES,
         }
-        return f"{AUTH_URL}?{urllib.parse.urlencode(params)}"
+        return f"{self._auth_url}?{urllib.parse.urlencode(params)}"
 
     def is_authenticated(self) -> bool:
         if not self._token.get("access_token"):
@@ -62,7 +67,7 @@ class EbayAuth:
         creds = base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
         async with httpx.AsyncClient() as c:
             resp = await c.post(
-                TOKEN_URL,
+                self._token_url,
                 headers={
                     "Authorization": f"Basic {creds}",
                     "Content-Type": "application/x-www-form-urlencoded",
@@ -90,7 +95,7 @@ class EbayAuth:
         creds = base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
         async with httpx.AsyncClient() as c:
             resp = await c.post(
-                TOKEN_URL,
+                self._token_url,
                 headers={
                     "Authorization": f"Basic {creds}",
                     "Content-Type": "application/x-www-form-urlencoded",

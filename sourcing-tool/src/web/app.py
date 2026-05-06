@@ -96,7 +96,54 @@ async def save_item(request: Request, item_id: int):
         ebay_price_usd=float(form.get("ebay_price_usd", 0)),
     )
     db.close()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JSONResponse({"ok": True})
     return RedirectResponse("/", status_code=303)
+
+
+@app.get("/api/item/{item_id}")
+async def api_item(item_id: int):
+    db = Database(DB_PATH)
+    listing = db.get_listing_by_id(item_id)
+    db.close()
+    if not listing:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    rate = await get_usd_to_jpy()
+    shipping = listing.listing_shipping_usd if listing.listing_shipping_usd is not None else CONFIG["listing"]["international_shipping_usd"]
+    margin = listing.listing_margin if listing.listing_margin is not None else CONFIG["listing"]["profit_margin"]
+    price_usd = listing.ebay_price_usd or calculate_ebay_price(listing.price_jpy, rate)
+    return JSONResponse({
+        "id": listing.id,
+        "title": listing.title,
+        "listing_title": listing.listing_title or listing.title,
+        "price_jpy": listing.price_jpy,
+        "url": listing.url,
+        "images": _parse_images(listing),
+        "condition": listing.condition,
+        "ebay_condition_id": listing.ebay_condition_id or 3000,
+        "ebay_price_usd": round(price_usd, 2),
+        "listing_description": listing.listing_description or listing.description or "",
+        "listing_category_id": listing.listing_category_id or "",
+        "shipping": round(shipping, 1),
+        "margin_pct": round(margin * 100),
+        "rate": round(rate, 1),
+        "default_shipping": CONFIG["listing"]["international_shipping_usd"],
+        "default_margin_pct": round(CONFIG["listing"]["profit_margin"] * 100),
+        "ebay_listing_id": listing.ebay_listing_id,
+    })
+
+
+@app.get("/debug/auth-url")
+async def debug_auth_url():
+    url = _auth.get_auth_url()
+    return JSONResponse({
+        "auth_url": url,
+        "client_id": _auth.client_id or "(未設定)",
+        "runame": _auth.runame or "(未設定)",
+        "is_sandbox": _auth.is_sandbox,
+        "is_configured": _auth.is_configured(),
+        "note": "is_sandbox=true の場合はSandbox認証を使用します。EBAY_CLIENT_IDにSBXが含まれているか確認してください",
+    })
 
 
 @app.post("/list")

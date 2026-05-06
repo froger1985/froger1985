@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import httpx
 
-BASE = "https://api.ebay.com"
+_PROD_BASE = "https://api.ebay.com"
+_SBX_BASE = "https://api.sandbox.ebay.com"
 
 CONDITION_ENUM: dict[int, str] = {
     1000: "NEW",
@@ -17,6 +18,7 @@ CONDITION_ENUM: dict[int, str] = {
 class EbayListingAPI:
     def __init__(self, auth):
         self.auth = auth
+        self.base = _SBX_BASE if getattr(auth, "is_sandbox", False) else _PROD_BASE
 
     async def _headers(self) -> dict:
         token = await self.auth.get_token()
@@ -30,7 +32,7 @@ class EbayListingAPI:
         headers = await self._headers()
         async with httpx.AsyncClient(timeout=10.0) as c:
             resp = await c.get(
-                f"{BASE}/commerce/taxonomy/v1/category_tree/0/get_category_suggestions",
+                f"{self.base}/commerce/taxonomy/v1/category_tree/0/get_category_suggestions",
                 headers=headers,
                 params={"q": query},
             )
@@ -54,7 +56,7 @@ class EbayListingAPI:
         async with httpx.AsyncClient(timeout=10.0) as c:
             for ptype in ("fulfillment", "payment", "return"):
                 resp = await c.get(
-                    f"{BASE}/sell/account/v1/{ptype}_policy",
+                    f"{self.base}/sell/account/v1/{ptype}_policy",
                     headers=headers,
                     params={"marketplace_id": "EBAY_US"},
                 )
@@ -81,7 +83,7 @@ class EbayListingAPI:
         async with httpx.AsyncClient(timeout=30.0) as c:
             # Step 1: Create inventory item
             r = await c.put(
-                f"{BASE}/sell/inventory/v1/inventory_item/{sku}",
+                f"{self.base}/sell/inventory/v1/inventory_item/{sku}",
                 headers=headers,
                 json={
                     "availability": {
@@ -100,7 +102,7 @@ class EbayListingAPI:
 
             # Step 2: Create offer
             r = await c.post(
-                f"{BASE}/sell/inventory/v1/offer",
+                f"{self.base}/sell/inventory/v1/offer",
                 headers=headers,
                 json={
                     "sku": sku,
@@ -125,7 +127,7 @@ class EbayListingAPI:
 
             # Step 3: Publish offer
             r = await c.post(
-                f"{BASE}/sell/inventory/v1/offer/{offer_id}/publish",
+                f"{self.base}/sell/inventory/v1/offer/{offer_id}/publish",
                 headers=headers,
             )
             if r.status_code != 200:
