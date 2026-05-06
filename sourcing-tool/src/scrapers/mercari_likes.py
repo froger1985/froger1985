@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from pathlib import Path
 
@@ -26,7 +25,6 @@ class MercariLikesScraper:
         from playwright.async_api import async_playwright
 
         async with async_playwright() as pw:
-            # Load saved session at context creation (the proper Playwright way)
             storage_state = str(SESSION_FILE) if SESSION_FILE.exists() else None
             browser = await pw.chromium.launch(headless=False)
             context = await browser.new_context(storage_state=storage_state)
@@ -35,6 +33,8 @@ class MercariLikesScraper:
 
             page = await context.new_page()
             collected: list[dict] = []
+            # Event fires when the first likes API response arrives
+            first_data_received = asyncio.Event()
 
             async def _intercept(response):
                 url = response.url
@@ -49,24 +49,34 @@ class MercariLikesScraper:
                         if items:
                             logger.info("Intercepted %d items from %s", len(items), url)
                             collected.extend(items)
+                            first_data_received.set()
                     except Exception:
                         pass
 
             page.on("response", _intercept)
 
+            print("メルカリのいいねページを開いています...")
             await page.goto(LIKES_PAGE, wait_until="domcontentloaded")
-            await page.wait_for_timeout(2000)
 
-            if not await self._is_logged_in(page):
-                print("\nブラウザでメルカリにログインしてください。")
-                print("ログインが完了すると自動で続行します（最大3分待機）...")
-                # Wait until redirected back to mypage after login
+            # Give the page 4 seconds to load liked items (works if already logged in)
+            try:
+                await asyncio.wait_for(first_data_received.wait(), timeout=4.0)
+                print(f"ログイン済みを確認。商品データを取得中...")
+            except asyncio.TimeoutError:
+                # Not logged in — show message and wait up to 3 minutes
+                print("\nログインが必要です。ブラウザでメルカリにログインしてください。")
+                print("ログインが完了すると自動で続行します（最大3分）...\n")
                 try:
-                    await page.wait_for_url("**/mypage/**", timeout=180000)
-                except Exception:
-                    pass
-                await page.wait_for_timeout(2000)
+                    await asyncio.wait_for(first_data_received.wait(), timeout=180.0)
+                    print("ログインを確認しました。商品データを取得中...")
+                except asyncio.TimeoutError:
+                    print("3分待ってもログインが確認できませんでした。")
+                    print("（いいねが0件の場合も同様です）")
+                    await self._save_session(context)
+                    await browser.close()
+                    return []
 
+            # Scroll down to trigger pagination and collect all items
             await self._scroll_to_collect(page, collected, limit)
             await self._save_session(context)
             await browser.close()
@@ -84,10 +94,6 @@ class MercariLikesScraper:
         logger.info("Total likes fetched: %d", len(listings))
         return listings
 
-    async def _is_logged_in(self, page) -> bool:
-        url = page.url
-        return "login" not in url and "signup" not in url
-
     async def _scroll_to_collect(self, page, collected: list[dict], limit: int) -> None:
         prev_count = 0
         no_change_streak = 0
@@ -103,7 +109,6 @@ class MercariLikesScraper:
                     break
             else:
                 no_change_streak = 0
-
             prev_count = current_count
 
             if limit > 0 and current_count >= limit:
