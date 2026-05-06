@@ -47,10 +47,11 @@ class MercariLikesScraper:
                     if items and isinstance(items, list):
                         print(f"  → 商品データ取得: {len(items)}件")
                         if not collected:
-                            # Print first item structure to debug parse issues
                             first = items[0]
-                            print(f"  [DEBUG] 最初のアイテムのキー: {list(first.keys())}")
-                            print(f"  [DEBUG] サンプル: id={first.get('id') or first.get('itemId')}, name={str(first.get('name') or first.get('itemName') or '')[:30]}, price={first.get('price') or first.get('sellingPrice')}")
+                            product = first.get("product", first)
+                            print(f"  [DEBUG] 外側のキー: {list(first.keys())}")
+                            print(f"  [DEBUG] product のキー: {list(product.keys())}")
+                            print(f"  [DEBUG] product サンプル値: { {k: str(v)[:40] for k, v in list(product.items())[:8]} }")
                         collected.extend(items)
                         first_data_received.set()
                     else:
