@@ -31,29 +31,27 @@ class MercariLikesScraper:
 
             async def _intercept(response):
                 url = response.url
-                # Capture ALL api.mercari.jp JSON responses for debugging
-                if "api.mercari.jp" in url and response.status == 200:
-                    try:
-                        content_type = response.headers.get("content-type", "")
-                        if "json" not in content_type:
-                            return
-                        data = await response.json()
-                        # Look for items in common response shapes
-                        items = (
-                            data.get("items")
-                            or data.get("data")
-                            or (data.get("result") or {}).get("items")
-                            or []
-                        )
-                        if items and isinstance(items, list) and len(items) > 0:
-                            print(f"  → 商品データ取得: {len(items)}件 ({url[:80]})")
-                            collected.extend(items)
-                            first_data_received.set()
-                        else:
-                            # Show all API calls so we can debug the URL
-                            print(f"  [API] {url[:80]}")
-                    except Exception:
-                        pass
+                if "likedProducts" not in url:
+                    return
+                if response.status != 200:
+                    return
+                try:
+                    data = await response.json()
+                    items = (
+                        data.get("items")
+                        or data.get("products")
+                        or data.get("likedProducts")
+                        or data.get("data")
+                        or []
+                    )
+                    if items and isinstance(items, list):
+                        print(f"  → 商品データ取得: {len(items)}件")
+                        collected.extend(items)
+                        first_data_received.set()
+                    else:
+                        print(f"  [DEBUG] likedProducts のキー: {list(data.keys())}")
+                except Exception:
+                    pass
 
             page.on("response", _intercept)
 
