@@ -55,7 +55,7 @@ Both pipelines write to the same `source_listings` table. The `source` column di
 
 **Playwright runs headed (visible browser)** — headless mode triggers Mercari's bot detection. The browser session is saved to `data/mercari_session.json` after first login so subsequent runs are automatic.
 
-**Mercari `/v1/likedProducts` API quirks** — responses nest product data under a `"product"` key with non-standard field names: `originId` (not `id`), `displayName` (not `name`), `price` as a string. This differs from the search API used by `MercariScraper`.
+**Mercari `/v1/likedProducts` API quirks** — responses nest product data under a `"product"` key with non-standard field names: `originId` (not `id`), `displayName` (not `name`), `price` as a string. This differs from the search API used by `MercariScraper`. The response also includes `stockState` (e.g. `PRODUCT_STOCK_STATE_OUT_OF_STOCK`) and `thumbnail` (single low-res image). Condition, description, and full-size images are **not** available from this endpoint — they must be fetched from individual item pages (`https://jp.mercari.com/item/{originId}`).
 
 **`config.yaml` is the source of truth for all numeric constants** — fee rates, shipping estimates, profit thresholds, rate limits. Never hardcode these in source files.
 
@@ -80,9 +80,16 @@ Both pipelines write to the same `source_listings` table. The `source` column di
 
 `.github/workflows/ebay-analysis.yml` runs `ebay_sold_analyzer.py` (the legacy standalone script, **not** `src/main.py`) on a weekly schedule and commits results CSV to `sourcing-tool/data/`. This workflow is independent of the `sourcing-tool/src/` codebase.
 
-## Active development branch
+## Planned pipeline (end-to-end)
 
-Current feature work: `claude/fetch-mercari-likes-IFQ70`
+```
+likes (done) → fetch-details → calculate eBay price → eBay listing → sold-out removal
+```
+
+- **fetch-details** (Step 2, next): fetch condition, description, full images from each item's Mercari page via `__NEXT_DATA__` JSON embedded in the HTML. Items with `stockState=PRODUCT_STOCK_STATE_OUT_OF_STOCK` are stored but skipped for listing.
+- **sold-out removal**: when a liked item goes out of stock, remove its eBay listing. Deferred until eBay listing is implemented.
+
+## Navigation
 
 Steering documents for in-progress tasks: `.steering/<date>-<task>/` (requirements, design, tasklist).
 Permanent architecture docs: `docs/`.
