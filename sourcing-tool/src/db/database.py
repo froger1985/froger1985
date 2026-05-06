@@ -73,7 +73,19 @@ class Database:
 
     def _init_schema(self):
         self.conn.executescript(_SCHEMA)
+        self._migrate_schema()
         self.conn.commit()
+
+    def _migrate_schema(self):
+        existing = {row[1] for row in self.conn.execute("PRAGMA table_info(source_listings)")}
+        new_columns = [
+            ("description", "TEXT DEFAULT ''"),
+            ("extra_images", "TEXT DEFAULT ''"),
+            ("stock_state", "TEXT DEFAULT ''"),
+        ]
+        for col, definition in new_columns:
+            if col not in existing:
+                self.conn.execute(f"ALTER TABLE source_listings ADD COLUMN {col} {definition}")
 
     def close(self):
         self.conn.close()
@@ -95,6 +107,30 @@ class Database:
         row = cur.fetchone()
         self.conn.commit()
         return row["id"]
+
+    def get_listings_without_details(self, source: str | None = None, limit: int = 0) -> list[SourceListing]:
+        query = "SELECT * FROM source_listings WHERE stock_state = ''"
+        params: list = []
+        if source:
+            query += " AND source = ?"
+            params.append(source)
+        query += " ORDER BY found_at DESC"
+        if limit > 0:
+            query += f" LIMIT {limit}"
+        rows = self.conn.execute(query, params).fetchall()
+        return [self._row_to_listing(r) for r in rows]
+
+    def update_listing_details(
+        self, listing_id: int, condition: str, description: str,
+        extra_images: str, stock_state: str,
+    ):
+        self.conn.execute(
+            """UPDATE source_listings
+               SET condition = ?, description = ?, extra_images = ?, stock_state = ?
+               WHERE id = ?""",
+            (condition, description, extra_images, stock_state, listing_id),
+        )
+        self.conn.commit()
 
     def get_new_listings(self) -> list[SourceListing]:
         rows = self.conn.execute(
@@ -199,12 +235,16 @@ class Database:
 
     @staticmethod
     def _row_to_listing(row: sqlite3.Row) -> SourceListing:
+        keys = row.keys()
         return SourceListing(
             id=row["id"], source=row["source"], source_id=row["source_id"],
             category=row["category"], title=row["title"],
             price_jpy=row["price_jpy"], url=row["url"],
             image_url=row["image_url"], condition=row["condition"],
             status=row["status"],
+            description=row["description"] if "description" in keys else "",
+            extra_images=row["extra_images"] if "extra_images" in keys else "",
+            stock_state=row["stock_state"] if "stock_state" in keys else "",
         )
 
     @staticmethod

@@ -17,6 +17,9 @@ class SourceListing:
     found_at: datetime = field(default_factory=datetime.now)
     status: str = "new"  # 'new', 'analyzed', 'alerted', 'purchased', 'skipped'
     id: int | None = None
+    description: str = ""
+    extra_images: str = ""   # JSON array of additional image URLs
+    stock_state: str = ""    # e.g. 'on_sale', 'sold_out', 'trading'
 
 
 @dataclass

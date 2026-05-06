@@ -296,6 +296,44 @@ def status():
     click.echo()
 
 
+async def run_fetch_details_pipeline(source: str, limit: int) -> None:
+    from src.scrapers.mercari_item import MercariItemFetcher
+
+    db = Database(DB_PATH)
+    targets = db.get_listings_without_details(source=source, limit=limit)
+
+    if not targets:
+        click.echo("詳細未取得の商品がありません。")
+        db.close()
+        return
+
+    click.echo(f"{len(targets)}件の詳細を取得します（{CONFIG['scraping']['request_delay_sec']}秒間隔）...")
+    fetcher = MercariItemFetcher()
+    ok = skip = 0
+
+    for i, listing in enumerate(targets, 1):
+        details = await fetcher.fetch_details(listing.source_id)
+        if details is None:
+            click.echo(f"  [{i}/{len(targets)}] スキップ（取得失敗）: {listing.title[:40]}")
+            skip += 1
+            continue
+
+        db.update_listing_details(
+            listing_id=listing.id,
+            condition=details["condition"],
+            description=details["description"],
+            extra_images=details["extra_images"],
+            stock_state=details["stock_state"],
+        )
+        stock_label = "売切" if "sold" in details["stock_state"].lower() or "out" in details["stock_state"].lower() else "販売中"
+        click.echo(f"  [{i}/{len(targets)}] {stock_label} | {details['condition'] or '状態不明'} | {listing.title[:40]}")
+        ok += 1
+
+    await fetcher.close()
+    db.close()
+    click.echo(f"\n完了: {ok}件更新, {skip}件スキップ")
+
+
 async def run_likes_pipeline(save: bool, limit: int) -> None:
     from src.scrapers.mercari_likes import MercariLikesScraper
 
@@ -339,6 +377,14 @@ def _print_likes_table(listings: list[SourceListing]) -> None:
 def likes(save: bool, limit: int):
     """メルカリのいいね商品リストを取得する。"""
     asyncio.run(run_likes_pipeline(save=save, limit=limit))
+
+
+@cli.command("fetch-details")
+@click.option("--limit", default=0, type=int, help="最大処理件数（0=全件）")
+@click.option("--source", default="mercari_likes", help="対象ソース")
+def fetch_details(limit: int, source: str):
+    """商品詳細（コンディション・説明・画像）を取得してDBを更新する。"""
+    asyncio.run(run_fetch_details_pipeline(source=source, limit=limit))
 
 
 if __name__ == "__main__":
