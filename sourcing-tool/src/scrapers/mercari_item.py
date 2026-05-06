@@ -103,12 +103,15 @@ class MercariItemFetcher:
             return None
 
         condition = self._get_condition(item)
-        description = item.get("description") or item.get("itemDescription") or ""
+        description = item.get("description") or item.get("item_description") or item.get("itemDescription") or ""
         images = self._get_images(item)
         stock_state = self._get_stock_state(item)
 
         if not any([condition, description, images, stock_state]):
             return None
+
+        if not condition:
+            logger.debug("condition not found for %s, item keys: %s", item_id, list(item.keys())[:20])
 
         return {
             "condition": condition,
@@ -118,17 +121,17 @@ class MercariItemFetcher:
         }
 
     def _get_condition(self, item: dict) -> str:
-        for key in ("itemCondition", "condition"):
+        for key in ("item_condition", "itemCondition", "condition"):
             cond = item.get(key)
             if isinstance(cond, dict):
-                return cond.get("name") or cond.get("displayName") or ""
+                return cond.get("name") or cond.get("displayName") or cond.get("id") or ""
             if isinstance(cond, str):
                 return cond
         return ""
 
     def _get_images(self, item: dict) -> list[str]:
         urls: list[str] = []
-        for key in ("photos", "images", "thumbnails"):
+        for key in ("photos", "images", "thumbnails", "item_images"):
             photos = item.get(key)
             if not photos:
                 continue
@@ -136,7 +139,7 @@ class MercariItemFetcher:
                 if isinstance(p, str):
                     urls.append(p)
                 elif isinstance(p, dict):
-                    url = p.get("imageUrl") or p.get("url") or p.get("thumbnail") or ""
+                    url = p.get("imageUrl") or p.get("image_url") or p.get("url") or p.get("thumbnail") or ""
                     if url:
                         urls.append(url)
             if urls:
@@ -144,7 +147,7 @@ class MercariItemFetcher:
         return urls
 
     def _get_stock_state(self, item: dict) -> str:
-        for key in ("status", "itemStatus", "stockState"):
+        for key in ("status", "item_status", "itemStatus", "stockState", "stock_state"):
             val = item.get(key)
             if isinstance(val, str) and val:
                 return val

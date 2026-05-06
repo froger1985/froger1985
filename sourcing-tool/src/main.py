@@ -382,8 +382,11 @@ def likes(save: bool, limit: int):
 @cli.command("fetch-details")
 @click.option("--limit", default=0, type=int, help="最大処理件数（0=全件）")
 @click.option("--source", default="mercari_likes", help="対象ソース")
-def fetch_details(limit: int, source: str):
+@click.option("--debug", is_flag=True, help="DEBUGログを有効にする")
+def fetch_details(limit: int, source: str, debug: bool):
     """商品詳細（コンディション・説明・画像）を取得してDBを更新する。"""
+    if debug:
+        logging.getLogger("src.scrapers.mercari_item").setLevel(logging.DEBUG)
     asyncio.run(run_fetch_details_pipeline(source=source, limit=limit))
 
 
