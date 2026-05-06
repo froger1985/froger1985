@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block header_right %}
+  {% if not configured %}
+    <span class="text-xs text-red-500">⚠ EBAY_RUNAME未設定</span>
+  {% elif authenticated %}
+    <span class="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">● eBay認証済み</span>
+  {% else %}
+    <a href="/auth/ebay" class="text-xs text-white bg-blue-500 px-3 py-1.5 rounded-full font-medium">
+      eBayログイン
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+{% if auth_msg == 'ok' %}
+<div class="bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-sm text-green-700 mb-3">
+  eBay認証が完了しました。
+</div>
+{% elif auth_msg == 'error' %}
+<div class="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700 mb-3">
+  eBay認証に失敗しました。再度お試しください。
+</div>
+{% endif %}
+
+<!-- Filter tabs -->
+<div class="flex gap-1 bg-gray-200 rounded-xl p-1 mb-4 text-sm">
+  <a href="/?tab=active"
+     class="flex-1 text-center py-2 rounded-lg transition
+            {% if tab=='active' %}bg-white shadow font-semibold{% else %}text-gray-500{% endif %}">
+    未出品 <span class="{% if tab=='active' %}text-blue-500{% endif %}font-bold">{{ counts.active }}</span>
+  </a>
+  <a href="/?tab=listed"
+     class="flex-1 text-center py-2 rounded-lg transition
+            {% if tab=='listed' %}bg-white shadow font-semibold{% else %}text-gray-500{% endif %}">
+    出品済 <span class="{% if tab=='listed' %}text-green-500{% endif %}font-bold">{{ counts.listed }}</span>
+  </a>
+  <a href="/?tab=sold"
+     class="flex-1 text-center py-2 rounded-lg transition
+            {% if tab=='sold' %}bg-white shadow font-semibold{% else %}text-gray-500{% endif %}">
+    売切れ <span class="text-gray-400 font-bold">{{ counts.sold }}</span>
+  </a>
+</div>
+
+<!-- Item list -->
+<form id="listForm" method="post" action="/list">
+{% if listings %}
+<div class="space-y-2">
+{% for l in listings %}
+<div class="bg-white rounded-xl shadow-sm p-3 flex gap-3 items-center">
+  {% if tab == 'active' %}
+  <input type="checkbox" name="item_ids" value="{{ l.id }}"
+         class="item-check w-5 h-5 rounded border-gray-300 text-blue-600 flex-shrink-0"
+         onchange="updateBar()">
+  {% endif %}
+  <img src="{{ l.image_url }}" class="w-16 h-16 object-cover rounded-lg flex-shrink-0 bg-gray-100"
+       onerror="this.style.display='none'">
+  <div class="flex-1 min-w-0">
+    <p class="text-sm font-medium leading-snug line-clamp-2 text-gray-800">
+      {{ l.listing_title or l.title }}
+    </p>
+    <div class="mt-1 flex items-center gap-1.5 flex-wrap">
+      <span class="text-xs text-gray-400">¥{{ "{:,}".format(l.price_jpy) }}</span>
+      <span class="text-gray-300">→</span>
+      <span class="text-sm font-bold text-blue-600">${{ "%.2f"|format(l.ebay_price_usd or 0) }}</span>
+    </div>
+    <div class="mt-1 flex items-center gap-1 flex-wrap">
+      <span class="text-xs px-1.5 py-0.5 rounded-full
+        {% if l.ebay_condition_id == 1000 %}bg-blue-50 text-blue-600
+        {% elif l.ebay_condition_id == 1500 %}bg-cyan-50 text-cyan-600
+        {% elif l.ebay_condition_id == 3000 %}bg-green-50 text-green-700
+        {% elif l.ebay_condition_id == 4000 %}bg-yellow-50 text-yellow-700
+        {% else %}bg-gray-100 text-gray-500{% endif %}">
+        {{ l.condition }}
+      </span>
+      {% if not l.listing_category_id and tab == 'active' %}
+      <span class="text-xs text-orange-500">カテゴリ未設定</span>
+      {% endif %}
+      {% if tab == 'listed' and l.ebay_listing_id %}
+      <span class="text-xs text-green-600">出品ID: {{ l.ebay_listing_id }}</span>
+      {% endif %}
+    </div>
+  </div>
+  {% if tab != 'listed' %}
+  <a href="/item/{{ l.id }}/edit"
+     class="text-xs text-blue-500 border border-blue-200 px-3 py-1.5 rounded-lg flex-shrink-0">
+    編集
+  </a>
+  {% endif %}
+</div>
+{% endfor %}
+</div>
+{% else %}
+<div class="text-center py-20 text-gray-400">
+  <p class="text-6xl mb-4">📦</p>
+  <p class="text-sm">商品がありません</p>
+</div>
+{% endif %}
+</form>
+
+<!-- Sticky bottom action bar -->
+{% if tab == 'active' %}
+<div id="actionBar" class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-xl px-4 py-4 hidden z-10">
+  <div class="max-w-2xl mx-auto flex items-center justify-between gap-3">
+    <div class="text-sm text-gray-600">
+      <span id="checkCount" class="font-bold text-blue-600">0</span>件選択中
+    </div>
+    <button type="button" onclick="submitList()"
+            class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-semibold text-sm max-w-xs">
+      eBayに出品する
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<script>
+function updateBar() {
+  const n = document.querySelectorAll('.item-check:checked').length;
+  const bar = document.getElementById('actionBar');
+  if (bar) {
+    bar.classList.toggle('hidden', n === 0);
+    document.getElementById('checkCount').textContent = n;
+  }
+}
+function submitList() {
+  const n = document.querySelectorAll('.item-check:checked').length;
+  if (n === 0) return;
+  if (!confirm(n + '件をeBayに出品しますか？')) return;
+  document.getElementById('listForm').submit();
+}
+</script>
+{% endblock %}

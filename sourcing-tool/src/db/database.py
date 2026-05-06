@@ -84,6 +84,12 @@ class Database:
             ("stock_state", "TEXT DEFAULT ''"),
             ("ebay_price_usd", "REAL DEFAULT NULL"),
             ("ebay_condition_id", "INTEGER DEFAULT NULL"),
+            ("listing_title", "TEXT DEFAULT NULL"),
+            ("listing_description", "TEXT DEFAULT NULL"),
+            ("listing_shipping_usd", "REAL DEFAULT NULL"),
+            ("listing_margin", "REAL DEFAULT NULL"),
+            ("listing_category_id", "TEXT DEFAULT NULL"),
+            ("ebay_listing_id", "TEXT DEFAULT NULL"),
         ]
         for col, definition in new_columns:
             if col not in existing:
@@ -131,6 +137,59 @@ class Database:
                SET condition = ?, description = ?, extra_images = ?, stock_state = ?
                WHERE id = ?""",
             (condition, description, extra_images, stock_state, listing_id),
+        )
+        self.conn.commit()
+
+    def get_listing_by_id(self, listing_id: int) -> SourceListing | None:
+        row = self.conn.execute(
+            "SELECT * FROM source_listings WHERE id = ?", (listing_id,)
+        ).fetchone()
+        return self._row_to_listing(row) if row else None
+
+    @staticmethod
+    def _is_in_stock(stock_state: str) -> bool:
+        s = stock_state.lower()
+        return bool(s) and "sold" not in s and "out" not in s and s not in ("stop", "trading")
+
+    def get_listings_for_ui(self, source: str = "mercari_likes", filter_mode: str = "active") -> list[SourceListing]:
+        rows = self.conn.execute(
+            "SELECT * FROM source_listings WHERE source = ? ORDER BY found_at DESC",
+            (source,),
+        ).fetchall()
+        listings = [self._row_to_listing(r) for r in rows]
+        if filter_mode == "active":
+            return [l for l in listings if l.ebay_listing_id is None and self._is_in_stock(l.stock_state)]
+        if filter_mode == "sold":
+            return [l for l in listings if not self._is_in_stock(l.stock_state)]
+        if filter_mode == "listed":
+            return [l for l in listings if l.ebay_listing_id is not None]
+        return listings
+
+    def update_listing_fields(
+        self,
+        listing_id: int,
+        listing_title: str,
+        listing_description: str,
+        listing_shipping_usd: float,
+        listing_margin: float,
+        ebay_condition_id: int,
+        listing_category_id: str | None,
+        ebay_price_usd: float,
+    ):
+        self.conn.execute(
+            """UPDATE source_listings
+               SET listing_title=?, listing_description=?, listing_shipping_usd=?,
+                   listing_margin=?, ebay_condition_id=?, listing_category_id=?, ebay_price_usd=?
+               WHERE id=?""",
+            (listing_title, listing_description, listing_shipping_usd,
+             listing_margin, ebay_condition_id, listing_category_id, ebay_price_usd, listing_id),
+        )
+        self.conn.commit()
+
+    def mark_as_listed(self, listing_id: int, ebay_listing_id: str):
+        self.conn.execute(
+            "UPDATE source_listings SET ebay_listing_id=?, status='alerted' WHERE id=?",
+            (ebay_listing_id, listing_id),
         )
         self.conn.commit()
 
@@ -268,6 +327,12 @@ class Database:
             stock_state=row["stock_state"] if "stock_state" in keys else "",
             ebay_price_usd=row["ebay_price_usd"] if "ebay_price_usd" in keys else None,
             ebay_condition_id=row["ebay_condition_id"] if "ebay_condition_id" in keys else None,
+            listing_title=row["listing_title"] if "listing_title" in keys else None,
+            listing_description=row["listing_description"] if "listing_description" in keys else None,
+            listing_shipping_usd=row["listing_shipping_usd"] if "listing_shipping_usd" in keys else None,
+            listing_margin=row["listing_margin"] if "listing_margin" in keys else None,
+            listing_category_id=row["listing_category_id"] if "listing_category_id" in keys else None,
+            ebay_listing_id=row["ebay_listing_id"] if "ebay_listing_id" in keys else None,
         )
 
     @staticmethod

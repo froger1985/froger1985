@@ -427,5 +427,34 @@ def fetch_details(limit: int, source: str, debug: bool):
     asyncio.run(run_fetch_details_pipeline(source=source, limit=limit))
 
 
+@cli.command()
+@click.option("--port", default=8000, type=int, help="ポート番号")
+def ui(port: int):
+    """出品管理Webアプリを起動する。スマホからも http://<PCのIP>:<port> でアクセス可能。"""
+    import socket
+    import threading
+    import webbrowser
+
+    import uvicorn
+
+    from src.web.app import app, get_local_ip
+
+    local_ip = get_local_ip()
+    click.echo(f"\n🌐 ブラウザで開く:    http://localhost:{port}")
+    click.echo(f"📱 スマホからアクセス: http://{local_ip}:{port}")
+    click.echo("   (同じWi-Fiに接続している必要があります)\n")
+    click.echo("終了するには Ctrl+C を押してください\n")
+
+    threading.Thread(
+        target=lambda: (
+            __import__("time").sleep(1),
+            webbrowser.open(f"http://localhost:{port}"),
+        ),
+        daemon=True,
+    ).start()
+
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+
+
 if __name__ == "__main__":
     cli()

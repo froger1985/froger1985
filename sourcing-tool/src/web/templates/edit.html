@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}編集{% endblock %}
+{% block header_right %}
+  <a href="/" class="text-sm text-gray-500 flex items-center gap-1">← 戻る</a>
+{% endblock %}
+
+{% block content %}
+<form method="post" action="/item/{{ listing.id }}/save">
+
+<!-- Images -->
+{% if images %}
+<div class="flex gap-2 overflow-x-auto pb-2 mb-4 -mx-4 px-4">
+  {% for img in images %}
+  <img src="{{ img }}" class="h-28 w-28 object-cover rounded-xl flex-shrink-0 bg-gray-100">
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Title -->
+<div class="bg-white rounded-xl shadow-sm p-4 mb-3">
+  <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">タイトル（eBay · 80文字以内）</label>
+  <textarea name="title" id="titleInput" rows="2" maxlength="80"
+            class="w-full mt-2 text-sm border-0 focus:ring-0 resize-none leading-relaxed"
+            oninput="updateCharCount(this)">{{ listing.listing_title or listing.title }}</textarea>
+  <div class="flex justify-end mt-1">
+    <span id="charCount" class="text-xs text-gray-400">0 / 80</span>
+  </div>
+</div>
+
+<!-- Price -->
+<div class="bg-white rounded-xl shadow-sm p-4 mb-3">
+  <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">価格設定</label>
+  <input type="hidden" id="price_jpy_val" value="{{ listing.price_jpy }}">
+  <input type="hidden" id="rate_val" value="{{ rate }}">
+  <input type="hidden" name="ebay_price_usd" id="ebay_price_hidden" value="{{ price_usd }}">
+
+  <div class="flex items-end justify-between mt-3 mb-4">
+    <div>
+      <p class="text-xs text-gray-400">仕入れ価格</p>
+      <p class="text-lg font-bold text-gray-700">¥{{ "{:,}".format(listing.price_jpy) }}</p>
+    </div>
+    <div class="text-2xl text-gray-300">→</div>
+    <div class="text-right">
+      <p class="text-xs text-gray-400">eBay出品価格</p>
+      <p class="text-2xl font-bold text-blue-600" id="calc_price">${{ "%.2f"|format(price_usd) }}</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-3">
+    <div>
+      <label class="text-xs text-gray-500">国際送料 (USD)</label>
+      <div class="flex items-center border rounded-lg px-3 py-2 mt-1 bg-gray-50">
+        <span class="text-gray-400 text-sm mr-1">$</span>
+        <input type="number" name="shipping_usd" id="shipping_val"
+               step="0.5" min="0" value="{{ shipping }}"
+               class="flex-1 bg-transparent text-sm border-0 focus:ring-0 p-0"
+               oninput="recalc()">
+      </div>
+      <p class="text-xs text-gray-400 mt-1">デフォルト: ${{ default_shipping }}</p>
+    </div>
+    <div>
+      <label class="text-xs text-gray-500">利益マージン</label>
+      <div class="flex items-center border rounded-lg px-3 py-2 mt-1 bg-gray-50">
+        <input type="number" name="margin_pct" id="margin_val"
+               step="1" min="0" max="200" value="{{ margin_pct }}"
+               class="flex-1 bg-transparent text-sm border-0 focus:ring-0 p-0"
+               oninput="recalc()">
+        <span class="text-gray-400 text-sm ml-1">%</span>
+      </div>
+      <p class="text-xs text-gray-400 mt-1">デフォルト: {{ default_margin_pct }}%</p>
+    </div>
+  </div>
+</div>
+
+<!-- Condition & Category -->
+<div class="bg-white rounded-xl shadow-sm p-4 mb-3">
+  <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">コンディション</label>
+  <select name="condition_id" class="w-full mt-2 text-sm border border-gray-200 rounded-lg p-2.5 bg-gray-50">
+    {% for cid, jp, en in [
+      (1000, '新品、未使用', 'New'),
+      (1500, '未使用に近い', 'New other'),
+      (3000, '目立った傷や汚れなし', 'Very Good'),
+      (4000, 'やや傷や汚れあり', 'Good'),
+      (5000, '傷や汚れあり', 'Acceptable'),
+      (7000, '全体的に状態が悪い', 'For parts')
+    ] %}
+    <option value="{{ cid }}" {% if listing.ebay_condition_id == cid %}selected{% endif %}>
+      {{ jp }} ({{ en }})
+    </option>
+    {% endfor %}
+  </select>
+
+  <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-4 block">eBayカテゴリ</label>
+  <input type="text" id="cat_search"
+         placeholder="日本語または英語でカテゴリを検索..."
+         class="w-full mt-2 text-sm border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+         autocomplete="off">
+  <input type="hidden" name="category_id" id="cat_id" value="{{ listing.listing_category_id or '' }}">
+  {% if listing.listing_category_id %}
+  <p class="text-xs text-green-600 mt-1" id="cat_selected">
+    選択中: ID {{ listing.listing_category_id }}
+  </p>
+  {% else %}
+  <p class="text-xs text-orange-500 mt-1" id="cat_selected">未設定（出品前に設定してください）</p>
+  {% endif %}
+  <div id="cat_results" class="mt-1 border border-gray-200 rounded-lg overflow-hidden hidden bg-white"></div>
+</div>
+
+<!-- Description -->
+<div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+  <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">商品説明</label>
+  <textarea name="description" rows="7"
+            class="w-full mt-2 text-sm border border-gray-200 rounded-lg p-3 resize-none bg-gray-50 leading-relaxed">{{ listing.listing_description or listing.description }}</textarea>
+</div>
+
+<!-- Save -->
+<button type="submit"
+        class="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold text-base shadow">
+  保存する
+</button>
+</form>
+
+<script>
+// Char counter
+function updateCharCount(el) {
+  const n = el.value.length;
+  const counter = document.getElementById('charCount');
+  counter.textContent = n + ' / 80';
+  counter.className = 'text-xs ' + (n > 70 ? 'text-orange-500 font-semibold' : 'text-gray-400');
+}
+updateCharCount(document.getElementById('titleInput'));
+
+// Live price recalculation (same formula as ebay_pricing.py)
+function recalc() {
+  const pjpy  = parseFloat(document.getElementById('price_jpy_val').value) || 0;
+  const rate  = parseFloat(document.getElementById('rate_val').value) || 150;
+  const ship  = parseFloat(document.getElementById('shipping_val').value) || 0;
+  const margin = (parseFloat(document.getElementById('margin_val').value) || 0) / 100;
+  const ebayFee = 0.1325, payFee = 0.029, payFixed = 0.30;
+  const cost = pjpy / rate + ship;
+  const raw  = (cost * (1 + margin) + payFixed) / (1 - ebayFee - payFee);
+  const final = Math.floor(raw) + 0.99;
+  document.getElementById('calc_price').textContent = '$' + final.toFixed(2);
+  document.getElementById('ebay_price_hidden').value = final.toFixed(2);
+}
+
+// Category search
+let catTimer;
+document.getElementById('cat_search').addEventListener('input', function() {
+  clearTimeout(catTimer);
+  const q = this.value.trim();
+  const box = document.getElementById('cat_results');
+  if (q.length < 2) { box.classList.add('hidden'); return; }
+  catTimer = setTimeout(async () => {
+    const res = await fetch('/api/categories?q=' + encodeURIComponent(q));
+    const data = await res.json();
+    if (!data.length) { box.classList.add('hidden'); return; }
+    box.innerHTML = data.map(c =>
+      `<button type="button"
+               onclick="selectCat('${c.id}','${c.name.replace(/'/g,"\\'")}')"
+               class="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 border-b last:border-0">
+         ${c.name} <span class="text-gray-400 text-xs">#${c.id}</span>
+       </button>`
+    ).join('');
+    box.classList.remove('hidden');
+  }, 400);
+});
+
+function selectCat(id, name) {
+  document.getElementById('cat_id').value = id;
+  document.getElementById('cat_search').value = name;
+  document.getElementById('cat_selected').textContent = '選択中: ' + name + ' (#' + id + ')';
+  document.getElementById('cat_selected').className = 'text-xs text-green-600 mt-1';
+  document.getElementById('cat_results').classList.add('hidden');
+}
+</script>
+{% endblock %}

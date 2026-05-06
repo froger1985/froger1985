@@ -22,6 +22,12 @@ class SourceListing:
     stock_state: str = ""    # e.g. 'on_sale', 'sold_out', 'trading'
     ebay_price_usd: float | None = None
     ebay_condition_id: int | None = None
+    listing_title: str | None = None
+    listing_description: str | None = None
+    listing_shipping_usd: float | None = None
+    listing_margin: float | None = None
+    listing_category_id: str | None = None
+    ebay_listing_id: str | None = None
 
 
 @dataclass
