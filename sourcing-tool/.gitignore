@@ -9,3 +9,6 @@ __pycache__/
 
 # Database
 data/*.db
+
+# Playwright session (contains auth cookies — never commit)
+data/mercari_session.json

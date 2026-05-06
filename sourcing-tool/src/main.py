@@ -296,5 +296,50 @@ def status():
     click.echo()
 
 
+async def run_likes_pipeline(save: bool, limit: int) -> None:
+    from src.scrapers.mercari_likes import MercariLikesScraper
+
+    scraper = MercariLikesScraper()
+    listings = await scraper.fetch_all_likes(limit=limit)
+
+    db = Database(DB_PATH) if save else None
+    new_count = skip_count = 0
+
+    if db:
+        for listing in listings:
+            if db.listing_exists(listing.source, listing.source_id):
+                skip_count += 1
+            else:
+                db.upsert_listing(listing)
+                new_count += 1
+        db.close()
+
+    _print_likes_table(listings)
+    if save:
+        click.echo(f"\n合計: {len(listings)}件 | 新規保存: {new_count}件 | スキップ(重複): {skip_count}件")
+
+
+def _print_likes_table(listings: list[SourceListing]) -> None:
+    click.echo(f"\nメルカリいいね商品一覧 ({len(listings)}件)\n")
+    if not listings:
+        click.echo("  (0件)")
+        return
+    click.echo(f"  {'No.':>4}  {'タイトル':<50}  {'価格(円)':>8}  コンディション")
+    click.echo("  " + "-" * 80)
+    for i, listing in enumerate(listings, 1):
+        title = listing.title[:50]
+        click.echo(
+            f"  {i:>4}  {title:<50}  {listing.price_jpy:>8,}  {listing.condition}"
+        )
+
+
+@cli.command()
+@click.option("--save/--no-save", default=True, help="DB に保存するか")
+@click.option("--limit", default=0, type=int, help="最大取得件数（0=全件）")
+def likes(save: bool, limit: int):
+    """メルカリのいいね商品リストを取得する。"""
+    asyncio.run(run_likes_pipeline(save=save, limit=limit))
+
+
 if __name__ == "__main__":
     cli()
