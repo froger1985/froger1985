@@ -20,6 +20,8 @@ class SourceListing:
     description: str = ""
     extra_images: str = ""   # JSON array of additional image URLs
     stock_state: str = ""    # e.g. 'on_sale', 'sold_out', 'trading'
+    ebay_price_usd: float | None = None
+    ebay_condition_id: int | None = None
 
 
 @dataclass

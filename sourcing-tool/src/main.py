@@ -371,6 +371,43 @@ def _print_likes_table(listings: list[SourceListing]) -> None:
         )
 
 
+async def run_calc_price_pipeline(source: str, limit: int) -> None:
+    from src.analysis.ebay_pricing import calculate_ebay_price, get_ebay_condition_id, condition_label
+
+    db = Database(DB_PATH)
+    rate = await get_usd_to_jpy()
+    targets = db.get_listings_for_pricing(source=source, limit=limit)
+
+    if not targets:
+        click.echo("eBay価格未計算の商品がありません。")
+        db.close()
+        return
+
+    click.echo(f"\n{len(targets)}件の価格を計算します（1 USD = {rate:.1f} JPY）\n")
+    click.echo(f"  {'タイトル':<45}  {'仕入れ(円)':>10}  {'出品価格(USD)':>13}  コンディション")
+    click.echo("  " + "-" * 90)
+
+    for listing in targets:
+        price_usd = calculate_ebay_price(listing.price_jpy, rate)
+        cond_id = get_ebay_condition_id(listing.condition)
+        db.update_ebay_price(listing.id, price_usd, cond_id)
+        title = listing.title[:45]
+        click.echo(
+            f"  {title:<45}  {listing.price_jpy:>10,}  ${price_usd:>12.2f}  {listing.condition}({condition_label(cond_id)})"
+        )
+
+    db.close()
+    click.echo(f"\n完了: {len(targets)}件の価格を計算しました")
+
+
+@cli.command("calc-price")
+@click.option("--limit", default=0, type=int, help="最大処理件数（0=全件）")
+@click.option("--source", default="mercari_likes", help="対象ソース")
+def calc_price(limit: int, source: str):
+    """eBay出品価格を計算してDBに保存する。"""
+    asyncio.run(run_calc_price_pipeline(source=source, limit=limit))
+
+
 @cli.command()
 @click.option("--save/--no-save", default=True, help="DB に保存するか")
 @click.option("--limit", default=0, type=int, help="最大取得件数（0=全件）")

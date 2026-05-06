@@ -82,6 +82,8 @@ class Database:
             ("description", "TEXT DEFAULT ''"),
             ("extra_images", "TEXT DEFAULT ''"),
             ("stock_state", "TEXT DEFAULT ''"),
+            ("ebay_price_usd", "REAL DEFAULT NULL"),
+            ("ebay_condition_id", "INTEGER DEFAULT NULL"),
         ]
         for col, definition in new_columns:
             if col not in existing:
@@ -129,6 +131,25 @@ class Database:
                SET condition = ?, description = ?, extra_images = ?, stock_state = ?
                WHERE id = ?""",
             (condition, description, extra_images, stock_state, listing_id),
+        )
+        self.conn.commit()
+
+    def get_listings_for_pricing(self, source: str | None = None, limit: int = 0) -> list[SourceListing]:
+        query = "SELECT * FROM source_listings WHERE condition != '' AND ebay_price_usd IS NULL"
+        params: list = []
+        if source:
+            query += " AND source = ?"
+            params.append(source)
+        query += " ORDER BY found_at DESC"
+        if limit > 0:
+            query += f" LIMIT {limit}"
+        rows = self.conn.execute(query, params).fetchall()
+        return [self._row_to_listing(r) for r in rows]
+
+    def update_ebay_price(self, listing_id: int, ebay_price_usd: float, ebay_condition_id: int):
+        self.conn.execute(
+            "UPDATE source_listings SET ebay_price_usd = ?, ebay_condition_id = ? WHERE id = ?",
+            (ebay_price_usd, ebay_condition_id, listing_id),
         )
         self.conn.commit()
 
@@ -245,6 +266,8 @@ class Database:
             description=row["description"] if "description" in keys else "",
             extra_images=row["extra_images"] if "extra_images" in keys else "",
             stock_state=row["stock_state"] if "stock_state" in keys else "",
+            ebay_price_usd=row["ebay_price_usd"] if "ebay_price_usd" in keys else None,
+            ebay_condition_id=row["ebay_condition_id"] if "ebay_condition_id" in keys else None,
         )
 
     @staticmethod
