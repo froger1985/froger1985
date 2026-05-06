@@ -46,8 +46,7 @@ async def index(request: Request, tab: str = "active", auth: str = ""):
         "sold": len(db.get_listings_for_ui(filter_mode="sold")),
     }
     db.close()
-    return templates.TemplateResponse("index.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "index.html", {
         "listings": listings,
         "tab": tab,
         "counts": counts,
@@ -70,8 +69,7 @@ async def edit_item(request: Request, item_id: int):
     margin = listing.listing_margin if listing.listing_margin is not None else CONFIG["listing"]["profit_margin"]
     price_usd = listing.ebay_price_usd or calculate_ebay_price(listing.price_jpy, rate)
 
-    return templates.TemplateResponse("edit.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "edit.html", {
         "listing": listing,
         "images": _parse_images(listing),
         "shipping": round(shipping, 1),
@@ -116,8 +114,7 @@ async def list_items(request: Request):
     ret = policies.get("return", [])
 
     if not ff or not pay or not ret:
-        return templates.TemplateResponse("result.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "result.html", {
             "results": [],
             "error": "eBayアカウントに配送・支払い・返品ポリシーが設定されていません。eBayセラーアカウントの「Business policies」で設定してください。",
         })
@@ -158,8 +155,7 @@ async def list_items(request: Request):
         })
 
     db.close()
-    return templates.TemplateResponse("result.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "result.html", {
         "results": results,
         "error": None,
     })
