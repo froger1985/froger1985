@@ -132,28 +132,31 @@ class MercariLikesScraper:
 
     def _parse_item(self, item: dict) -> SourceListing | None:
         try:
-            item_id = str(item.get("id", ""))
+            # /v1/likedProducts nests the actual product under the "product" key
+            product = item.get("product", item)
+
+            item_id = str(product.get("id", ""))
             if not item_id:
                 return None
 
-            title = item.get("name", "")
-            price = item.get("price", 0)
+            title = product.get("name", "")
+            price = product.get("price", 0)
             if not title or not price:
                 return None
 
             image_url = ""
-            thumbnails = item.get("thumbnails", [])
+            thumbnails = product.get("thumbnails", [])
             if thumbnails:
                 image_url = thumbnails[0] if isinstance(thumbnails[0], str) else ""
             if not image_url:
-                image_url = item.get("thumbnail", "")
+                image_url = product.get("thumbnail", "")
 
             condition = ""
-            cond_obj = item.get("itemCondition", item.get("item_condition", {}))
+            cond_obj = product.get("itemCondition", product.get("item_condition", {}))
             if isinstance(cond_obj, dict):
                 condition = cond_obj.get("name", "")
             if not condition:
-                condition = item.get("itemConditionText", "")
+                condition = product.get("itemConditionText", "")
 
             return SourceListing(
                 source="mercari_likes",
