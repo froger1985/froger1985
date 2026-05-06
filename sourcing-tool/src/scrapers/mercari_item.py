@@ -54,6 +54,13 @@ class MercariItemFetcher:
     def _parse_html(self, html: str, item_id: str) -> dict | None:
         match = NEXT_DATA_RE.search(html)
         if not match:
+            # Debug: show what script tags and data patterns exist
+            scripts = re.findall(r'<script[^>]*id="([^"]*)"', html)
+            has_nuxt = "__NUXT_DATA__" in html or "__NUXT__" in html
+            has_state = "window.__INITIAL_STATE__" in html or "window.__STATE__" in html
+            print(f"  [DEBUG] script ids: {scripts[:10]}")
+            print(f"  [DEBUG] nuxt={has_nuxt}, initial_state={has_state}")
+            print(f"  [DEBUG] HTML先頭200文字: {html[:200]!r}")
             logger.warning("No __NEXT_DATA__ found for item %s", item_id)
             return None
         try:
