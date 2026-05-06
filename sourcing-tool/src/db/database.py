@@ -109,7 +109,7 @@ class Database:
         return row["id"]
 
     def get_listings_without_details(self, source: str | None = None, limit: int = 0) -> list[SourceListing]:
-        query = "SELECT * FROM source_listings WHERE stock_state = ''"
+        query = "SELECT * FROM source_listings WHERE stock_state = '' OR condition = ''"
         params: list = []
         if source:
             query += " AND source = ?"
