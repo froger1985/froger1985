@@ -13,7 +13,6 @@ WEB_BASE = "https://jp.mercari.com/item"
 LIKES_PAGE = "https://jp.mercari.com/mypage/likes"
 SESSION_FILE = Path("data/mercari_session.json")
 SCROLL_PAUSE_MS = 2500
-API_TIMEOUT_MS = 5000
 
 
 class MercariLikesScraper:
@@ -27,10 +26,12 @@ class MercariLikesScraper:
         from playwright.async_api import async_playwright
 
         async with async_playwright() as pw:
+            # Load saved session at context creation (the proper Playwright way)
+            storage_state = str(SESSION_FILE) if SESSION_FILE.exists() else None
             browser = await pw.chromium.launch(headless=False)
-            context = await browser.new_context()
-
-            self._load_session(context)
+            context = await browser.new_context(storage_state=storage_state)
+            if storage_state:
+                logger.info("Session loaded from %s", SESSION_FILE)
 
             page = await context.new_page()
             collected: list[dict] = []
@@ -51,14 +52,16 @@ class MercariLikesScraper:
                     except Exception:
                         pass
 
-            page.on("response", lambda r: asyncio.ensure_future(_intercept(r)))
+            page.on("response", _intercept)
 
             await page.goto(LIKES_PAGE, wait_until="domcontentloaded")
+            await page.wait_for_timeout(2000)
 
             if not await self._is_logged_in(page):
-                print("\nメルカリにログインしてください。")
-                print("ログイン完了後、Enter キーを押してください: ", end="", flush=True)
-                await asyncio.get_event_loop().run_in_executor(None, input)
+                print("\nブラウザでメルカリにログインしてください。")
+                print("ログイン完了後、ここで Enter キーを押してください: ", end="", flush=True)
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(None, input)
                 await page.wait_for_load_state("networkidle")
 
             await self._scroll_to_collect(page, collected, limit)
@@ -103,22 +106,10 @@ class MercariLikesScraper:
             if limit > 0 and current_count >= limit:
                 break
 
-    def _load_session(self, context) -> None:
-        if SESSION_FILE.exists():
-            try:
-                state = json.loads(SESSION_FILE.read_text())
-                asyncio.get_event_loop().run_until_complete(
-                    context.add_cookies(state.get("cookies", []))
-                )
-                logger.info("Session loaded from %s", SESSION_FILE)
-            except Exception:
-                logger.warning("Failed to load session file, starting fresh")
-
     async def _save_session(self, context) -> None:
         try:
             SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
-            state = await context.storage_state()
-            SESSION_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2))
+            await context.storage_state(path=str(SESSION_FILE))
             logger.info("Session saved to %s", SESSION_FILE)
         except Exception:
             logger.warning("Failed to save session", exc_info=True)
