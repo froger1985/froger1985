@@ -12,3 +12,7 @@ data/*.db
 
 # Playwright session (contains auth cookies — never commit)
 data/mercari_session.json
+
+# 一時デバッグスクリプト
+check_db.py
+debug_*.py
