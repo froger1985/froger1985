@@ -46,12 +46,6 @@ class MercariLikesScraper:
                     )
                     if items and isinstance(items, list):
                         print(f"  → 商品データ取得: {len(items)}件")
-                        if not collected:
-                            first = items[0]
-                            product = first.get("product", first)
-                            print(f"  [DEBUG] 外側のキー: {list(first.keys())}")
-                            print(f"  [DEBUG] product のキー: {list(product.keys())}")
-                            print(f"  [DEBUG] product サンプル値: { {k: str(v)[:40] for k, v in list(product.items())[:8]} }")
                         collected.extend(items)
                         first_data_received.set()
                     else:
@@ -133,41 +127,31 @@ class MercariLikesScraper:
 
     def _parse_item(self, item: dict) -> SourceListing | None:
         try:
-            # /v1/likedProducts nests the actual product under the "product" key
+            # /v1/likedProducts: product data is nested under "product" key
+            # Field names differ from the search API:
+            #   id → originId, name → displayName, price → price (str)
             product = item.get("product", item)
 
-            item_id = str(product.get("id", ""))
+            item_id = str(product.get("originId", ""))
             if not item_id:
                 return None
 
-            title = product.get("name", "")
-            price = product.get("price", 0)
-            if not title or not price:
+            title = product.get("displayName", "")
+            price_raw = product.get("price", 0)
+            if not title or not price_raw:
                 return None
 
-            image_url = ""
-            thumbnails = product.get("thumbnails", [])
-            if thumbnails:
-                image_url = thumbnails[0] if isinstance(thumbnails[0], str) else ""
-            if not image_url:
-                image_url = product.get("thumbnail", "")
-
-            condition = ""
-            cond_obj = product.get("itemCondition", product.get("item_condition", {}))
-            if isinstance(cond_obj, dict):
-                condition = cond_obj.get("name", "")
-            if not condition:
-                condition = product.get("itemConditionText", "")
+            image_url = product.get("thumbnail", "")
 
             return SourceListing(
                 source="mercari_likes",
                 source_id=item_id,
                 category="unknown",
                 title=title,
-                price_jpy=int(price),
+                price_jpy=int(price_raw),
                 url=f"{WEB_BASE}/{item_id}",
                 image_url=image_url,
-                condition=condition,
+                condition="",
             )
         except Exception:
             logger.debug("Failed to parse item", exc_info=True)
