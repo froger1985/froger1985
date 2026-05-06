@@ -59,10 +59,13 @@ class MercariLikesScraper:
 
             if not await self._is_logged_in(page):
                 print("\nブラウザでメルカリにログインしてください。")
-                print("ログイン完了後、ここで Enter キーを押してください: ", end="", flush=True)
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, input)
-                await page.wait_for_load_state("networkidle")
+                print("ログインが完了すると自動で続行します（最大3分待機）...")
+                # Wait until redirected back to mypage after login
+                try:
+                    await page.wait_for_url("**/mypage/**", timeout=180000)
+                except Exception:
+                    pass
+                await page.wait_for_timeout(2000)
 
             await self._scroll_to_collect(page, collected, limit)
             await self._save_session(context)
