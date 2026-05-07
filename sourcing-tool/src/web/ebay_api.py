@@ -67,8 +67,7 @@ class EbayListingAPI:
             json={
                 "location": {"address": {"country": "JP"}},
                 "merchantLocationStatus": "ENABLED",
-                "name": "Japan",
-                "locationTypes": ["WAREHOUSE"],
+                "name": "Japan Warehouse",
             },
         )
         print(f"[eBay] create location: {r.status_code} {r.text[:200]}")
@@ -131,31 +130,53 @@ class EbayListingAPI:
             if r.status_code not in (200, 204):
                 return {"success": False, "error": f"inventory: {r.status_code} {r.text[:200]}"}
 
-            # Step 2: Create offer
-            r = await c.post(
-                f"{self.base}/sell/inventory/v1/offer",
-                headers=headers,
-                json={
-                    "sku": sku,
-                    "marketplaceId": "EBAY_US",
-                    "format": "FIXED_PRICE",
-                    "availableQuantity": 1,
-                    "categoryId": category_id,
-                    "listingDescription": description or title,
-                    "merchantLocationKey": location_key,
-                    "listingPolicies": {
-                        "fulfillmentPolicyId": fulfillment_policy_id,
-                        "paymentPolicyId": payment_policy_id,
-                        "returnPolicyId": return_policy_id,
-                    },
-                    "pricingSummary": {
-                        "price": {"currency": "USD", "value": f"{price_usd:.2f}"}
-                    },
+            # Step 2: Create or update offer
+            offer_body = {
+                "sku": sku,
+                "marketplaceId": "EBAY_US",
+                "format": "FIXED_PRICE",
+                "availableQuantity": 1,
+                "categoryId": category_id,
+                "listingDescription": description or title,
+                "merchantLocationKey": location_key,
+                "listingPolicies": {
+                    "fulfillmentPolicyId": fulfillment_policy_id,
+                    "paymentPolicyId": payment_policy_id,
+                    "returnPolicyId": return_policy_id,
                 },
-            )
-            if r.status_code not in (200, 201):
+                "pricingSummary": {
+                    "price": {"currency": "USD", "value": f"{price_usd:.2f}"}
+                },
+            }
+            r = await c.post(f"{self.base}/sell/inventory/v1/offer", headers=headers, json=offer_body)
+            if r.status_code in (200, 201):
+                offer_id = r.json()["offerId"]
+            elif r.status_code == 400 and any(
+                e.get("errorId") == 25002 for e in r.json().get("errors", [])
+            ):
+                # Offer already exists — get its ID from error params or via GET
+                offer_id = next(
+                    (p["val"] for e in r.json().get("errors", [])
+                     for p in e.get("parameters", []) if p.get("name") == "offerId"),
+                    None,
+                )
+                if not offer_id:
+                    gr = await c.get(
+                        f"{self.base}/sell/inventory/v1/offer",
+                        headers=headers,
+                        params={"sku": sku},
+                    )
+                    offer_id = gr.json().get("offers", [{}])[0].get("offerId")
+                if not offer_id:
+                    return {"success": False, "error": "offer: cannot retrieve existing offerId"}
+                await c.put(
+                    f"{self.base}/sell/inventory/v1/offer/{offer_id}",
+                    headers=headers,
+                    json={k: v for k, v in offer_body.items() if k not in ("sku", "marketplaceId", "format")},
+                )
+                print(f"[eBay] updated existing offer {offer_id}")
+            else:
                 return {"success": False, "error": f"offer: {r.status_code} {r.text[:200]}"}
-            offer_id = r.json()["offerId"]
 
             # Step 3: Publish offer
             r = await c.post(
