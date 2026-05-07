@@ -29,7 +29,11 @@ class EbayListingAPI:
         }
 
     async def get_category_suggestions(self, query: str) -> list[dict]:
-        headers = await self._headers()
+        token = await self.auth.get_app_token()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        }
         async with httpx.AsyncClient(timeout=10.0) as c:
             resp = await c.get(
                 f"{self.base}/commerce/taxonomy/v1/category_tree/0/get_category_suggestions",

@@ -114,6 +114,26 @@ class EbayAuth:
         self._save_token()
         return True
 
+    async def get_app_token(self) -> str:
+        """Client Credentials flow — app-level token for public APIs (no user login needed)."""
+        creds = base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
+        async with httpx.AsyncClient() as c:
+            resp = await c.post(
+                self._token_url,
+                headers={
+                    "Authorization": f"Basic {creds}",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                data={
+                    "grant_type": "client_credentials",
+                    "scope": "https://api.ebay.com/oauth/api_scope",
+                },
+            )
+        if resp.status_code == 200:
+            return resp.json().get("access_token", "")
+        print(f"[eBay app token] {resp.status_code}: {resp.text[:200]}")
+        return ""
+
     async def get_token(self) -> str | None:
         if self.is_authenticated():
             return self._token["access_token"]
