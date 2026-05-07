@@ -156,7 +156,7 @@ class EbayListingAPI:
             ):
                 # Offer already exists — get its ID from error params or via GET
                 offer_id = next(
-                    (p["val"] for e in r.json().get("errors", [])
+                    (p.get("value") for e in r.json().get("errors", [])
                      for p in e.get("parameters", []) if p.get("name") == "offerId"),
                     None,
                 )
