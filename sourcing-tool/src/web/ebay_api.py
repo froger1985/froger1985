@@ -86,23 +86,28 @@ class EbayListingAPI:
         headers = await self._headers()
         condition = CONDITION_ENUM.get(condition_id, "USED_GOOD")
 
+        inventory_body = {
+            "availability": {
+                "shipToLocationAvailability": {"quantity": 1}
+            },
+            "condition": condition,
+            "product": {
+                "title": title[:80],
+                "description": description or title,
+            },
+        }
+        if image_urls:
+            inventory_body["product"]["imageUrls"] = image_urls[:12]
+
         async with httpx.AsyncClient(timeout=30.0) as c:
             # Step 1: Create inventory item
+            print(f"[eBay] PUT inventory_item SKU={sku} condition={condition} images={len(image_urls)}")
             r = await c.put(
                 f"{self.base}/sell/inventory/v1/inventory_item/{sku}",
                 headers=headers,
-                json={
-                    "availability": {
-                        "shipToLocationAvailability": {"quantity": 1}
-                    },
-                    "condition": condition,
-                    "product": {
-                        "title": title[:80],
-                        "description": description or title,
-                        "imageUrls": image_urls[:12],
-                    },
-                },
+                json=inventory_body,
             )
+            print(f"[eBay] inventory response: {r.status_code} {r.text[:300]}")
             if r.status_code not in (200, 204):
                 return {"success": False, "error": f"inventory: {r.status_code} {r.text[:200]}"}
 
