@@ -37,6 +37,7 @@ class EbayListingAPI:
                 params={"q": query},
             )
         if resp.status_code != 200:
+            print(f"[eBay category] {resp.status_code}: {resp.text[:300]}")
             return []
         suggestions = resp.json().get("categorySuggestions", [])[:5]
         return [

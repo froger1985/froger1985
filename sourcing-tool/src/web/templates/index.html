@@ -429,6 +429,11 @@ function initEditForm() {
         const res = await fetch('/api/categories?q=' + encodeURIComponent(q));
         const data = await res.json();
         if (!data.length) { box.classList.add('hidden'); return; }
+        if (!data.length) {
+          box.innerHTML = '<div class="px-3 py-2.5 text-sm text-gray-400">結果なし（eBay未認証またはAPIエラー）</div>';
+          box.classList.remove('hidden');
+          return;
+        }
         box.innerHTML = data.map(c =>
           `<button type="button"
                    data-id="${esc(c.id)}" data-name="${esc(c.name)}"
