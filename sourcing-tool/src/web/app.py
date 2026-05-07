@@ -4,6 +4,22 @@ import json
 import socket
 from pathlib import Path
 
+_PRESETS_FILE = Path("data/category_presets.json")
+
+
+def _load_presets() -> list[dict]:
+    if _PRESETS_FILE.exists():
+        try:
+            return json.loads(_PRESETS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return []
+
+
+def _save_presets(presets: list[dict]):
+    _PRESETS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _PRESETS_FILE.write_text(json.dumps(presets, ensure_ascii=False, indent=2), encoding="utf-8")
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -227,6 +243,33 @@ async def api_categories(q: str = ""):
         return JSONResponse([])
     ebay = EbayListingAPI(_auth)
     return JSONResponse(await ebay.get_category_suggestions(q))
+
+
+@app.get("/api/category-presets")
+async def get_category_presets():
+    return JSONResponse(_load_presets())
+
+
+@app.post("/api/category-presets")
+async def add_category_preset(request: Request):
+    body = await request.json()
+    name = str(body.get("name", "")).strip()
+    cat_id = str(body.get("id", "")).strip()
+    if not name or not cat_id:
+        return JSONResponse({"ok": False, "error": "name and id required"}, status_code=400)
+    presets = _load_presets()
+    if any(p["id"] == cat_id for p in presets):
+        return JSONResponse({"ok": False, "error": "already exists"}, status_code=400)
+    presets.append({"name": name, "id": cat_id})
+    _save_presets(presets)
+    return JSONResponse({"ok": True})
+
+
+@app.delete("/api/category-presets/{cat_id}")
+async def delete_category_preset(cat_id: str):
+    presets = [p for p in _load_presets() if p["id"] != cat_id]
+    _save_presets(presets)
+    return JSONResponse({"ok": True})
 
 
 def get_local_ip() -> str:

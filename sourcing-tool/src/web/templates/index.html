@@ -314,11 +314,26 @@ function renderEditForm(data) {
         ${condOpts}
       </select>
       <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-4 block">eBayカテゴリ</label>
-      <input type="text" id="ef_cat_search" placeholder="日本語または英語でカテゴリを検索..."
-             class="w-full mt-2 text-sm border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+      <div id="ef_presets" class="flex flex-wrap gap-1.5 mt-2 mb-2"></div>
+      <input type="text" id="ef_cat_search" placeholder="または検索..."
+             class="w-full text-sm border border-gray-200 rounded-lg p-2.5 bg-gray-50"
              autocomplete="off">
       <input type="hidden" name="category_id" id="ef_cat_id" value="${esc(data.listing_category_id)}">
       ${catStatus}
+      <div id="ef_add_preset_btn" class="hidden mt-2">
+        <button type="button" onclick="showAddPreset()"
+                class="text-xs text-blue-500 border border-blue-200 px-3 py-1.5 rounded-lg">
+          ＋ プリセットに追加
+        </button>
+      </div>
+      <div id="ef_add_preset_form" class="hidden mt-2 flex gap-2 items-center">
+        <input type="text" id="ef_preset_name" placeholder="表示名（例: アニメフィギュア）"
+               class="flex-1 text-sm border border-gray-200 rounded-lg p-2 bg-gray-50">
+        <button type="button" onclick="savePreset()"
+                class="text-xs bg-blue-500 text-white px-3 py-2 rounded-lg flex-shrink-0">保存</button>
+        <button type="button" onclick="cancelPreset()"
+                class="text-xs text-gray-400 px-2 py-2">×</button>
+      </div>
       <div id="ef_cat_results" class="mt-1 border border-gray-200 rounded-lg overflow-hidden hidden bg-white relative z-10"></div>
     </div>
     <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
@@ -333,8 +348,74 @@ function renderEditForm(data) {
   </form>`;
 }
 
+async function loadPresets() {
+  const box = document.getElementById('ef_presets');
+  if (!box) return;
+  try {
+    const res = await fetch('/api/category-presets');
+    const presets = await res.json();
+    if (!presets.length) {
+      box.innerHTML = '<span class="text-xs text-gray-400">プリセットなし（カテゴリ選択後に追加できます）</span>';
+      return;
+    }
+    box.innerHTML = presets.map(p =>
+      `<button type="button"
+               onclick="efSelectCat('${esc(p.id)}','${p.name.replace(/'/g,"\\'")}')"
+               class="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-2.5 py-1 rounded-full hover:bg-blue-100 flex items-center gap-1 group">
+         ${esc(p.name)}
+         <span onclick="event.stopPropagation();deletePreset('${esc(p.id)}')"
+               class="hidden group-hover:inline text-blue-300 hover:text-red-400 ml-0.5">×</span>
+       </button>`
+    ).join('');
+  } catch(e) {}
+}
+
+function showAddPreset() {
+  document.getElementById('ef_add_preset_btn').classList.add('hidden');
+  document.getElementById('ef_add_preset_form').classList.remove('hidden');
+  const catId = document.getElementById('ef_cat_id')?.value || '';
+  const catSel = document.getElementById('ef_cat_selected')?.textContent || '';
+  const nameInput = document.getElementById('ef_preset_name');
+  if (nameInput) {
+    const match = catSel.match(/選択中: (.+?) \(#/);
+    nameInput.value = match ? match[1] : '';
+    nameInput.focus();
+  }
+}
+
+function cancelPreset() {
+  document.getElementById('ef_add_preset_btn').classList.remove('hidden');
+  document.getElementById('ef_add_preset_form').classList.add('hidden');
+}
+
+async function savePreset() {
+  const catId = document.getElementById('ef_cat_id')?.value || '';
+  const name = document.getElementById('ef_preset_name')?.value?.trim() || '';
+  if (!catId || !name) return;
+  const res = await fetch('/api/category-presets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, id: catId }),
+  });
+  const data = await res.json();
+  if (data.ok) {
+    cancelPreset();
+    showToast('プリセットに追加しました');
+    loadPresets();
+  } else {
+    showToast(data.error === 'already exists' ? '既に追加済みです' : '保存に失敗しました', 'error');
+  }
+}
+
+async function deletePreset(catId) {
+  if (!confirm('このプリセットを削除しますか？')) return;
+  await fetch('/api/category-presets/' + catId, { method: 'DELETE' });
+  loadPresets();
+}
+
 function initEditForm() {
   efCharCount();
+  loadPresets();
   const catInput = document.getElementById('ef_cat_search');
   if (!catInput) return;
   let catTimer;
@@ -398,6 +479,11 @@ function efSelectCat(id, name) {
     selEl.className = 'text-xs text-green-600 mt-1 block';
   }
   if (resultsEl) resultsEl.classList.add('hidden');
+  const addBtn = document.getElementById('ef_add_preset_btn');
+  const addForm = document.getElementById('ef_add_preset_form');
+  if (addBtn && addForm && addForm.classList.contains('hidden')) {
+    addBtn.classList.remove('hidden');
+  }
 }
 
 async function saveCurrentItem() {
