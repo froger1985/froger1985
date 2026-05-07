@@ -186,12 +186,17 @@ class EbayListingAPI:
                     offer_id = gr.json().get("offers", [{}])[0].get("offerId")
                 if not offer_id:
                     return {"success": False, "error": "offer: cannot retrieve existing offerId"}
-                await c.put(
+                # Delete stale offer and recreate to avoid cached category/aspects state
+                dr = await c.delete(
                     f"{self.base}/sell/inventory/v1/offer/{offer_id}",
                     headers=headers,
-                    json={k: v for k, v in offer_body.items() if k not in ("sku", "marketplaceId", "format")},
                 )
-                print(f"[eBay] updated existing offer {offer_id}")
+                print(f"[eBay] deleted stale offer {offer_id}: {dr.status_code}")
+                r = await c.post(f"{self.base}/sell/inventory/v1/offer", headers=headers, json=offer_body)
+                if r.status_code not in (200, 201):
+                    return {"success": False, "error": f"offer recreate: {r.status_code} {r.text[:200]}"}
+                offer_id = r.json()["offerId"]
+                print(f"[eBay] recreated offer {offer_id}")
             else:
                 return {"success": False, "error": f"offer: {r.status_code} {r.text[:200]}"}
 
