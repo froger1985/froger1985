@@ -269,5 +269,6 @@ class EbayListingAPI:
                     json=inventory_body,
                 )
             if r.status_code != 200:
+                print(f"[eBay] FULL publish error: {r.text}")
                 return {"success": False, "error": f"publish: {r.status_code} {r.text[:200]}"}
             return {"success": True, "listing_id": r.json().get("listingId", "")}
