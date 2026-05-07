@@ -31,6 +31,35 @@ class EbayListingAPI:
             "Content-Language": "en-US",
         }
 
+    async def _get_required_aspects(self, category_id: str, title: str) -> dict[str, list[str]]:
+        """Fetch required aspects for a category from the Taxonomy API and return defaults."""
+        token = await self.auth.get_app_token()
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            resp = await c.get(
+                f"{self.base}/commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category",
+                headers=headers,
+                params={"category_id": category_id},
+            )
+        if resp.status_code != 200:
+            print(f"[eBay aspects] {resp.status_code}: {resp.text[:200]}")
+            return {}
+        aspects: dict[str, list[str]] = {}
+        for aspect in resp.json().get("aspects", []):
+            if not aspect.get("aspectConstraint", {}).get("aspectRequired"):
+                continue
+            name: str = aspect["localizedAspectName"]
+            allowed = [v["localizedValue"] for v in aspect.get("aspectValues", [])]
+            name_lower = name.lower()
+            if allowed:
+                aspects[name] = [allowed[0]]
+            elif "country" in name_lower or "region of manufacture" in name_lower:
+                aspects[name] = ["Japan"]
+            else:
+                aspects[name] = [title[:65]]
+        print(f"[eBay aspects] required for category {category_id}: {list(aspects)}")
+        return aspects
+
     async def get_category_suggestions(self, query: str) -> list[dict]:
         token = await self.auth.get_app_token()
         headers = {
@@ -119,6 +148,8 @@ class EbayListingAPI:
         headers = await self._headers()
         condition = CONDITION_ENUM.get(condition_id, "USED_GOOD")
 
+        required_aspects = await self._get_required_aspects(category_id, title)
+
         inventory_body = {
             "availability": {
                 "shipToLocationAvailability": {"quantity": 1}
@@ -127,7 +158,7 @@ class EbayListingAPI:
             "product": {
                 "title": title[:80],
                 "description": description or title,
-                "aspects": {},
+                "aspects": required_aspects,
             },
         }
         if image_urls:
