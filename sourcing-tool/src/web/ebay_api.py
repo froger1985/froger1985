@@ -127,6 +127,7 @@ class EbayListingAPI:
             "product": {
                 "title": title[:80],
                 "description": description or title,
+                "aspects": {},
             },
         }
         if image_urls:
