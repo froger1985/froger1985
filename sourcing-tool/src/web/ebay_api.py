@@ -57,20 +57,34 @@ class EbayListingAPI:
         ]
 
     async def _ensure_merchant_location(self, c: httpx.AsyncClient, headers: dict) -> str:
-        key = "japan_main"
+        key = "JP01"
         r = await c.get(f"{self.base}/sell/inventory/v1/location/{key}", headers=headers)
         if r.status_code == 200:
+            print(f"[eBay] location {key} already exists")
             return key
+        loc_headers = {
+            "Authorization": headers["Authorization"],
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        body = {
+            "location": {
+                "address": {
+                    "country": "JP",
+                    "city": "Tokyo",
+                    "postalCode": "1000001",
+                }
+            },
+            "merchantLocationStatus": "ENABLED",
+            "name": "Japan",
+        }
+        print(f"[eBay] creating location with body: {body}")
         r = await c.post(
             f"{self.base}/sell/inventory/v1/location/{key}",
-            headers=headers,
-            json={
-                "location": {"address": {"country": "JP"}},
-                "merchantLocationStatus": "ENABLED",
-                "name": "Japan Warehouse",
-            },
+            headers=loc_headers,
+            json=body,
         )
-        print(f"[eBay] create location: {r.status_code} {r.text[:200]}")
+        print(f"[eBay] create location: {r.status_code} {r.text[:300]}")
         return key
 
     async def get_policies(self) -> dict[str, list]:
