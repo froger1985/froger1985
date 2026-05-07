@@ -26,6 +26,7 @@ class EbayListingAPI:
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "Accept": "application/json",
+            "Content-Language": "en-US",
         }
 
     async def get_category_suggestions(self, query: str) -> list[dict]:
