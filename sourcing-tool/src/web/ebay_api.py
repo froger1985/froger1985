@@ -172,7 +172,12 @@ class EbayListingAPI:
                 "availabilityDistributions"
             ] = [{"merchantLocationKey": location_key, "quantity": 1}]
 
-            # Step 1: Create inventory item
+            # Step 1: Delete then recreate inventory item to clear stale aspects
+            print(f"[eBay] DELETE inventory_item SKU={sku}")
+            await c.delete(
+                f"{self.base}/sell/inventory/v1/inventory_item/{sku}",
+                headers=headers,
+            )
             print(f"[eBay] PUT inventory_item SKU={sku} condition={condition} images={len(image_urls)}")
             r = await c.put(
                 f"{self.base}/sell/inventory/v1/inventory_item/{sku}",
