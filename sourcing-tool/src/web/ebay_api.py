@@ -56,6 +56,24 @@ class EbayListingAPI:
             for s in suggestions
         ]
 
+    async def _ensure_merchant_location(self, c: httpx.AsyncClient, headers: dict) -> str:
+        key = "japan_main"
+        r = await c.get(f"{self.base}/sell/inventory/v1/location/{key}", headers=headers)
+        if r.status_code == 200:
+            return key
+        r = await c.post(
+            f"{self.base}/sell/inventory/v1/location/{key}",
+            headers=headers,
+            json={
+                "location": {"address": {"country": "JP"}},
+                "merchantLocationStatus": "ENABLED",
+                "name": "Japan",
+                "locationTypes": ["WAREHOUSE"],
+            },
+        )
+        print(f"[eBay] create location: {r.status_code} {r.text[:200]}")
+        return key
+
     async def get_policies(self) -> dict[str, list]:
         headers = await self._headers()
         result: dict[str, list] = {}
@@ -100,6 +118,8 @@ class EbayListingAPI:
             inventory_body["product"]["imageUrls"] = image_urls[:12]
 
         async with httpx.AsyncClient(timeout=30.0) as c:
+            location_key = await self._ensure_merchant_location(c, headers)
+
             # Step 1: Create inventory item
             print(f"[eBay] PUT inventory_item SKU={sku} condition={condition} images={len(image_urls)}")
             r = await c.put(
@@ -122,6 +142,7 @@ class EbayListingAPI:
                     "availableQuantity": 1,
                     "categoryId": category_id,
                     "listingDescription": description or title,
+                    "merchantLocationKey": location_key,
                     "listingPolicies": {
                         "fulfillmentPolicyId": fulfillment_policy_id,
                         "paymentPolicyId": payment_policy_id,
