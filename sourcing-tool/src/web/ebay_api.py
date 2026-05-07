@@ -167,6 +167,11 @@ class EbayListingAPI:
         async with httpx.AsyncClient(timeout=30.0) as c:
             location_key = await self._ensure_merchant_location(c, headers)
 
+            # Link availability to the merchant location explicitly
+            inventory_body["availability"]["shipToLocationAvailability"][
+                "availabilityDistributions"
+            ] = [{"merchantLocationKey": location_key, "quantity": 1}]
+
             # Step 1: Create inventory item
             print(f"[eBay] PUT inventory_item SKU={sku} condition={condition} images={len(image_urls)}")
             r = await c.put(
