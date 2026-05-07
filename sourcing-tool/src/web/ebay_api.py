@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import httpx
 
 _PROD_BASE = "https://api.ebay.com"
@@ -192,11 +194,29 @@ class EbayListingAPI:
             else:
                 return {"success": False, "error": f"offer: {r.status_code} {r.text[:200]}"}
 
-            # Step 3: Publish offer
+            # Step 3: Publish offer (with item specifics retry)
             r = await c.post(
                 f"{self.base}/sell/inventory/v1/offer/{offer_id}/publish",
                 headers=headers,
             )
+            if r.status_code == 400:
+                missing_aspects: dict[str, list[str]] = {}
+                for e in r.json().get("errors", []):
+                    m = re.search(r"item specific (.+?) is missing", e.get("message", ""))
+                    if m:
+                        missing_aspects[m.group(1)] = [title[:65]]
+                if missing_aspects:
+                    print(f"[eBay] adding missing aspects: {list(missing_aspects)}")
+                    inventory_body["product"]["aspects"] = missing_aspects
+                    await c.put(
+                        f"{self.base}/sell/inventory/v1/inventory_item/{sku}",
+                        headers=headers,
+                        json=inventory_body,
+                    )
+                    r = await c.post(
+                        f"{self.base}/sell/inventory/v1/offer/{offer_id}/publish",
+                        headers=headers,
+                    )
             if r.status_code != 200:
                 return {"success": False, "error": f"publish: {r.status_code} {r.text[:200]}"}
             return {"success": True, "listing_id": r.json().get("listingId", "")}
