@@ -8,25 +8,7 @@ $ps = "powershell.exe"
 $hidden = "-NonInteractive -WindowStyle Hidden"
 
 # =====================================================
-# 1. Web UI - start at logon
-# =====================================================
-$action   = New-ScheduledTaskAction -Execute $ps `
-              -Argument "$hidden -File `"$scriptDir\start_ui.ps1`""
-$trigger  = New-ScheduledTaskTrigger -AtLogon
-$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 24) `
-              -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
-Register-ScheduledTask `
-    -TaskName    "SourcingTool-UI" `
-    -Description "Sourcing Tool Web UI - start at logon" `
-    -Action      $action `
-    -Trigger     $trigger `
-    -Settings    $settings `
-    -RunLevel    Highest `
-    -Force | Out-Null
-Write-Host "[OK] SourcingTool-UI  (at logon)"
-
-# =====================================================
-# 2. fetch-details - every 10 minutes
+# 1. fetch-details - every 10 minutes
 # =====================================================
 $action   = New-ScheduledTaskAction -Execute $ps `
               -Argument "$hidden -File `"$scriptDir\run_fetch_details.ps1`""
@@ -45,7 +27,7 @@ Register-ScheduledTask `
 Write-Host "[OK] SourcingTool-FetchDetails  (every 10 min)"
 
 # =====================================================
-# 3. Mercari likes - 07:00 AM and 22:00 PM daily
+# 2. Mercari likes - 07:00 AM and 22:00 PM daily
 # =====================================================
 $action    = New-ScheduledTaskAction -Execute $ps `
                -Argument "-File `"$scriptDir\run_likes.ps1`""
