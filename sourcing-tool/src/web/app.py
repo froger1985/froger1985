@@ -286,6 +286,52 @@ async def auth_callback(code: str = None, error: str = None):
     return RedirectResponse("/?auth=" + ("ok" if success else "error"))
 
 
+_TRANSLATE_PROMPT_FILE = Path("data/translate_prompt.txt")
+_DEFAULT_TRANSLATE_PROMPT = """\
+You are an eBay listing assistant specializing in Japanese secondhand goods sold internationally.
+Translate the following Japanese product title and description into natural English optimized for eBay listings.
+
+Rules:
+- Title: concise, descriptive, under 80 characters, capitalize main words
+- Description: clear and honest for international buyers, keep condition details
+- Do NOT invent or add information not present in the original
+- Return only valid JSON, no extra text"""
+
+
+def _load_translate_prompt() -> str:
+    if _TRANSLATE_PROMPT_FILE.exists():
+        text = _TRANSLATE_PROMPT_FILE.read_text(encoding="utf-8").strip()
+        if text:
+            return text
+    return _DEFAULT_TRANSLATE_PROMPT
+
+
+@app.get("/api/translate-prompt")
+async def get_translate_prompt():
+    return JSONResponse({
+        "prompt": _load_translate_prompt(),
+        "is_default": not _TRANSLATE_PROMPT_FILE.exists(),
+    })
+
+
+@app.post("/api/translate-prompt")
+async def save_translate_prompt(request: Request):
+    body = await request.json()
+    prompt = str(body.get("prompt", "")).strip()
+    if not prompt:
+        return JSONResponse({"ok": False, "error": "プロンプトが空です"}, status_code=400)
+    _TRANSLATE_PROMPT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _TRANSLATE_PROMPT_FILE.write_text(prompt, encoding="utf-8")
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/translate-prompt/reset")
+async def reset_translate_prompt():
+    if _TRANSLATE_PROMPT_FILE.exists():
+        _TRANSLATE_PROMPT_FILE.unlink()
+    return JSONResponse({"ok": True, "prompt": _DEFAULT_TRANSLATE_PROMPT})
+
+
 @app.post("/api/translate")
 async def api_translate(request: Request):
     body = await request.json()
@@ -298,14 +344,8 @@ async def api_translate(request: Request):
     if not api_key:
         return JSONResponse({"error": "ANTHROPIC_API_KEY が設定されていません"}, status_code=500)
 
-    prompt = f"""You are an eBay listing assistant specializing in Japanese secondhand goods sold internationally.
-Translate the following Japanese product title and description into natural English optimized for eBay listings.
-
-Rules:
-- Title: concise, descriptive, under 80 characters, capitalize main words
-- Description: clear and honest for international buyers, keep condition details
-- Do NOT invent or add information not present in the original
-- Return only valid JSON, no extra text
+    system_prompt = _load_translate_prompt()
+    prompt = f"""{system_prompt}
 
 Input:
 Title: {title}
@@ -321,7 +361,6 @@ Return JSON: {{"title": "...", "description": "..."}}"""
             messages=[{"role": "user", "content": prompt}],
         )
         raw = message.content[0].text.strip()
-        # JSON部分だけ抽出
         start = raw.find("{")
         end = raw.rfind("}") + 1
         result = json.loads(raw[start:end])

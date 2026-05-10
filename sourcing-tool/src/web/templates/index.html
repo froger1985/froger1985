@@ -127,6 +127,32 @@
   </div>
 </div>
 
+<!-- Translate prompt modal -->
+<div id="promptModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80dvh]">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <h2 class="font-semibold text-gray-800">翻訳プロンプト設定</h2>
+      <button onclick="closePromptModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+    </div>
+    <div class="px-5 py-3 flex-1 overflow-y-auto flex flex-col gap-2">
+      <p class="text-xs text-gray-500">「英語に翻訳」ボタンを押したときにClaudeへ送る指示文です。タイトルと説明の翻訳スタイルをカスタマイズできます。</p>
+      <p id="promptModalNote" class="text-xs text-purple-500"></p>
+      <textarea id="promptModalText" rows="12"
+                class="w-full text-sm border border-gray-200 rounded-xl p-3 resize-none bg-gray-50 leading-relaxed outline-none focus:border-purple-300"></textarea>
+    </div>
+    <div class="flex items-center justify-between px-5 py-4 border-t border-gray-100 gap-2">
+      <button onclick="resetPromptModal()"
+              class="text-xs text-gray-400 hover:text-gray-600 underline">デフォルトに戻す</button>
+      <div class="flex gap-2">
+        <button onclick="closePromptModal()"
+                class="text-sm px-4 py-2 rounded-xl border border-gray-200 text-gray-600">キャンセル</button>
+        <button id="promptSaveBtn" onclick="savePromptModal()"
+                class="text-sm px-4 py-2 rounded-xl bg-purple-500 text-white font-medium">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Mobile overlay -->
 <div id="mobileOverlay" class="fixed inset-0 z-30 bg-white overflow-y-auto hidden">
   <div class="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 z-10 shadow-sm">
@@ -266,10 +292,16 @@ function renderEditForm(data) {
     <div class="bg-white rounded-xl shadow-sm p-4 mb-3">
       <div class="flex items-center justify-between">
         <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">タイトル（eBay · 80文字以内）</label>
-        <button type="button" id="ef_translate_btn" onclick="translateListing()"
-                class="text-xs text-white bg-purple-500 hover:bg-purple-600 px-3 py-1 rounded-full font-medium transition-colors">
-          ✦ 英語に翻訳
-        </button>
+        <div class="flex items-center gap-1">
+          <button type="button" id="ef_translate_btn" onclick="translateListing()"
+                  class="text-xs text-white bg-purple-500 hover:bg-purple-600 px-3 py-1 rounded-full font-medium transition-colors">
+            ✦ 英語に翻訳
+          </button>
+          <button type="button" onclick="openPromptModal()"
+                  class="text-xs text-purple-400 hover:text-purple-600 px-1.5 py-1 rounded-full transition-colors" title="プロンプト設定">
+            ⚙
+          </button>
+        </div>
       </div>
       <textarea name="title" id="ef_title" rows="2" maxlength="80"
                 class="w-full mt-2 text-sm border-0 focus:ring-0 resize-none leading-relaxed outline-none"
@@ -533,6 +565,65 @@ async function saveCurrentItem() {
   }
   btn.textContent = '保存する';
   btn.disabled = false;
+}
+
+async function openPromptModal() {
+  const modal = document.getElementById('promptModal');
+  const ta = document.getElementById('promptModalText');
+  const note = document.getElementById('promptModalNote');
+  modal.classList.remove('hidden');
+  ta.value = '読み込み中...';
+  ta.disabled = true;
+  try {
+    const resp = await fetch('/api/translate-prompt');
+    const data = await resp.json();
+    ta.value = data.prompt;
+    note.textContent = data.is_default ? '（現在はデフォルトプロンプトを使用中）' : '（カスタムプロンプト使用中）';
+  } catch(e) {
+    ta.value = '';
+    note.textContent = '読み込みに失敗しました';
+  }
+  ta.disabled = false;
+}
+
+function closePromptModal() {
+  document.getElementById('promptModal').classList.add('hidden');
+}
+
+async function savePromptModal() {
+  const ta = document.getElementById('promptModalText');
+  const prompt = ta.value.trim();
+  if (!prompt) { showToast('プロンプトが空です', 'error'); return; }
+  const btn = document.getElementById('promptSaveBtn');
+  btn.textContent = '保存中...'; btn.disabled = true;
+  try {
+    const resp = await fetch('/api/translate-prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      showToast('プロンプトを保存しました');
+      closePromptModal();
+    } else {
+      showToast(data.error || '保存に失敗しました', 'error');
+    }
+  } catch(e) {
+    showToast('通信エラー', 'error');
+  }
+  btn.textContent = '保存'; btn.disabled = false;
+}
+
+async function resetPromptModal() {
+  if (!confirm('デフォルトプロンプトに戻しますか？')) return;
+  const resp = await fetch('/api/translate-prompt/reset', { method: 'POST' });
+  const data = await resp.json();
+  if (data.ok) {
+    document.getElementById('promptModalText').value = data.prompt;
+    document.getElementById('promptModalNote').textContent = '（デフォルトに戻しました）';
+    showToast('デフォルトに戻しました');
+  }
 }
 
 async function translateListing() {
