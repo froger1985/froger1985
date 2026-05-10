@@ -86,7 +86,7 @@ class EbayListingAPI:
             resp = await c.get(
                 f"{self.base}/sell/metadata/v1/marketplace/EBAY_US/get_item_condition_policies",
                 headers=headers,
-                params={"category_id": category_id},
+                params={"filter": f"categoryId:{category_id}"},
             )
         if resp.status_code != 200:
             print(f"[eBay conditions] {resp.status_code}: {resp.text[:200]}")
@@ -94,6 +94,7 @@ class EbayListingAPI:
         policies = resp.json().get("conditionPolicies", [])
         if not policies:
             return []
+        # filter パラメータで絞り込んでいるので policies[0] が対象カテゴリ
         return [c["conditionEnum"] for c in policies[0].get("conditions", [])]
 
     async def end_listing(self, sku: str) -> dict:
