@@ -20,6 +20,7 @@ def _save_presets(presets: list[dict]):
     _PRESETS_FILE.parent.mkdir(parents=True, exist_ok=True)
     _PRESETS_FILE.write_text(json.dumps(presets, ensure_ascii=False, indent=2), encoding="utf-8")
 
+import anthropic
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -282,6 +283,55 @@ async def auth_callback(code: str = None, error: str = None):
         return RedirectResponse("/?auth=error")
     success = await _auth.exchange_code(code)
     return RedirectResponse("/?auth=" + ("ok" if success else "error"))
+
+
+@app.post("/api/translate")
+async def api_translate(request: Request):
+    body = await request.json()
+    title = str(body.get("title", "")).strip()
+    description = str(body.get("description", "")).strip()
+    if not title and not description:
+        return JSONResponse({"error": "タイトルまたは説明が必要です"}, status_code=400)
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return JSONResponse({"error": "ANTHROPIC_API_KEY が設定されていません"}, status_code=500)
+
+    prompt = f"""You are an eBay listing assistant specializing in Japanese secondhand goods sold internationally.
+Translate the following Japanese product title and description into natural English optimized for eBay listings.
+
+Rules:
+- Title: concise, descriptive, under 80 characters, capitalize main words
+- Description: clear and honest for international buyers, keep condition details
+- Do NOT invent or add information not present in the original
+- Return only valid JSON, no extra text
+
+Input:
+Title: {title}
+Description: {description}
+
+Return JSON: {{"title": "...", "description": "..."}}"""
+
+    try:
+        client = anthropic.AsyncAnthropic(api_key=api_key)
+        message = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = message.content[0].text.strip()
+        # JSON部分だけ抽出
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        result = json.loads(raw[start:end])
+        return JSONResponse({
+            "title": result.get("title", ""),
+            "description": result.get("description", ""),
+        })
+    except json.JSONDecodeError:
+        return JSONResponse({"error": "翻訳結果のパースに失敗しました"}, status_code=500)
+    except Exception as e:
+        return JSONResponse({"error": f"翻訳エラー: {e}"}, status_code=500)
 
 
 @app.get("/api/categories")
