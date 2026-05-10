@@ -232,6 +232,21 @@ class Database:
         ).fetchone()
         return row is not None
 
+    def get_all_source_ids(self, source: str) -> list[tuple[str, str | None]]:
+        """Return (source_id, ebay_listing_id) for all rows with the given source."""
+        rows = self.conn.execute(
+            "SELECT source_id, ebay_listing_id FROM source_listings WHERE source = ?",
+            (source,),
+        ).fetchall()
+        return [(r["source_id"], r["ebay_listing_id"]) for r in rows]
+
+    def delete_listing_by_source_id(self, source: str, source_id: str):
+        self.conn.execute(
+            "DELETE FROM source_listings WHERE source = ? AND source_id = ?",
+            (source, source_id),
+        )
+        self.conn.commit()
+
     # --- eBay Sold ---
 
     def save_ebay_sold(self, sold: EbaySold):

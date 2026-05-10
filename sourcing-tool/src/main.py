@@ -350,11 +350,55 @@ async def run_likes_pipeline(save: bool, limit: int) -> None:
             else:
                 db.upsert_listing(listing)
                 new_count += 1
+
+        # Detect unliked items only on a full (unlimited) successful fetch
+        if limit == 0 and listings:
+            await _handle_unliked_items(db, listings)
+
         db.close()
 
     _print_likes_table(listings)
     if save:
         click.echo(f"\n合計: {len(listings)}件 | 新規保存: {new_count}件 | スキップ(重複): {skip_count}件")
+
+
+async def _handle_unliked_items(db: Database, fetched: list) -> None:
+    """Compare freshly fetched likes against DB; end eBay listings or delete unlisted rows."""
+    from src.web.ebay_api import EbayListingAPI
+    from src.web.ebay_auth import EbayAuth
+
+    fetched_ids = {l.source_id for l in fetched}
+    existing = db.get_all_source_ids("mercari_likes")
+    removed = [(sid, eid) for sid, eid in existing if sid not in fetched_ids]
+
+    if not removed:
+        return
+
+    click.echo(f"\n[いいね解除検知] {len(removed)}件がいいねから削除されました")
+
+    auth = EbayAuth()
+    ebay = EbayListingAPI(auth)
+
+    for source_id, ebay_listing_id in removed:
+        if ebay_listing_id:
+            sku = f"mercari_{source_id}"
+            click.echo(f"  → eBay出品取り消し中: SKU={sku} (listing_id={ebay_listing_id})")
+            try:
+                result = await ebay.end_listing(sku)
+                if result["success"]:
+                    db.conn.execute(
+                        "UPDATE source_listings SET ebay_listing_id=NULL, status='new' WHERE source=? AND source_id=?",
+                        ("mercari_likes", source_id),
+                    )
+                    db.conn.commit()
+                    click.echo(f"    ✓ 取り消し完了")
+                else:
+                    click.echo(f"    ✗ 取り消し失敗: {result.get('error', '不明なエラー')}")
+            except Exception as e:
+                click.echo(f"    ✗ エラー: {e}")
+        else:
+            db.delete_listing_by_source_id("mercari_likes", source_id)
+            click.echo(f"  → DB削除: source_id={source_id}")
 
 
 def _print_likes_table(listings: list[SourceListing]) -> None:
