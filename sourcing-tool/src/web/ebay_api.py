@@ -17,7 +17,8 @@ CONDITION_ENUM: dict[int, str] = {
 }
 
 _CONDITION_FALLBACK: dict[str, str] = {
-    "USED_VERY_GOOD": "USED_GOOD",
+    "USED_VERY_GOOD": "USED_EXCELLENT",
+    "USED_EXCELLENT": "USED_GOOD",
     "USED_GOOD": "USED_ACCEPTABLE",
 }
 
