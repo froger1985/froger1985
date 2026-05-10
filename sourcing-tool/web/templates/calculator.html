@@ -1,0 +1,99 @@
+{% extends "layout.html" %}
+{% block title %}利益計算機 — Sourcing Tool{% endblock %}
+{% block content %}
+<h1>利益計算機</h1>
+
+<div class="calc-grid">
+  <div class="card">
+    <h2>入力</h2>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="form-group">
+        <label>メルカリ仕入れ価格 (円)</label>
+        <input type="number" id="buy_price" value="3000" min="0" oninput="calc()">
+      </div>
+      <div class="form-group">
+        <label>eBay平均売却価格 (USD)</label>
+        <input type="number" id="ebay_price" value="50" min="0" step="0.5" oninput="calc()">
+      </div>
+      <div class="form-group">
+        <label>USD/JPY レート</label>
+        <input type="number" id="rate" value="150" min="100" max="200" oninput="calc()">
+      </div>
+      <div class="form-group">
+        <label>国際送料 (円)</label>
+        <input type="number" id="shipping" value="2000" min="0" oninput="calc()">
+      </div>
+      <div class="form-group">
+        <label>eBay手数料率 (%)</label>
+        <input type="number" id="ebay_fee_rate" value="13.25" min="0" max="100" step="0.25" oninput="calc()">
+      </div>
+      <div class="form-group">
+        <label>決済手数料率 (%)</label>
+        <input type="number" id="pay_fee_rate" value="2.9" min="0" max="10" step="0.1" oninput="calc()">
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <h2>計算結果</h2>
+      <div class="calc-result" id="profit_disp" style="margin-bottom:8px">—</div>
+      <div id="rate_disp" style="color:var(--muted);font-size:13px">利益率: —</div>
+    </div>
+    <div class="card">
+      <h2>内訳</h2>
+      <div id="breakdown">
+        <div class="calc-row"><span>eBay売却(円換算)</span><span id="b_sell">—</span></div>
+        <div class="calc-row"><span>仕入れ価格</span><span id="b_buy">—</span></div>
+        <div class="calc-row"><span>国際送料</span><span id="b_ship">—</span></div>
+        <div class="calc-row"><span>eBay手数料</span><span id="b_efee">—</span></div>
+        <div class="calc-row"><span>決済手数料</span><span id="b_pfee">—</span></div>
+        <div class="calc-row"><span>純利益</span><span id="b_profit">—</span></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2>判定基準</h2>
+      <div class="calc-row"><span class="badge badge-buy">BUY推奨</span><span>利益率 ≥ 30%</span></div>
+      <div class="calc-row"><span class="badge badge-watch">WATCH</span><span>利益率 21〜29%</span></div>
+      <div class="calc-row"><span class="badge" style="background:rgba(148,163,184,.1);color:var(--muted);border:1px solid var(--border)">SKIP</span><span>利益率 &lt; 21%</span></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function calc() {
+  var buy   = parseFloat(document.getElementById('buy_price').value) || 0;
+  var ebay  = parseFloat(document.getElementById('ebay_price').value) || 0;
+  var rate  = parseFloat(document.getElementById('rate').value) || 150;
+  var ship  = parseFloat(document.getElementById('shipping').value) || 0;
+  var efeeR = parseFloat(document.getElementById('ebay_fee_rate').value) / 100 || 0.1325;
+  var pfeeR = parseFloat(document.getElementById('pay_fee_rate').value) / 100 || 0.029;
+
+  var sell_jpy = Math.round(ebay * rate);
+  var efee     = Math.round(sell_jpy * efeeR);
+  var pfee     = Math.round(sell_jpy * pfeeR + 0.30 * rate);
+  var profit   = sell_jpy - buy - ship - efee - pfee;
+  var pr       = buy > 0 ? profit / buy : 0;
+
+  var fmt = function(n) { return '¥' + n.toLocaleString('ja-JP'); };
+
+  document.getElementById('b_sell').textContent   = fmt(sell_jpy);
+  document.getElementById('b_buy').textContent    = '−' + fmt(buy);
+  document.getElementById('b_ship').textContent   = '−' + fmt(ship);
+  document.getElementById('b_efee').textContent   = '−' + fmt(efee);
+  document.getElementById('b_pfee').textContent   = '−' + fmt(pfee);
+  document.getElementById('b_profit').textContent = fmt(profit);
+
+  var el = document.getElementById('profit_disp');
+  el.textContent = fmt(profit);
+  el.style.color = pr >= 0.30 ? 'var(--green)' : pr >= 0.21 ? 'var(--yellow)' : 'var(--red)';
+
+  var label = pr >= 0.30 ? '✅ BUY推奨' : pr >= 0.21 ? '👀 WATCH' : '❌ SKIP';
+  document.getElementById('rate_disp').textContent =
+    '利益率: ' + (pr * 100).toFixed(1) + '%　' + label;
+}
+calc();
+</script>
+{% endblock %}

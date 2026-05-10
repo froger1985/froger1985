@@ -1,0 +1,69 @@
+{% extends "layout.html" %}
+{% block title %}結果一覧 — Sourcing Tool{% endblock %}
+{% block content %}
+<h1>分析結果一覧</h1>
+
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+  <div>
+    <span style="color:var(--muted);font-size:12px;margin-right:8px">推奨:</span>
+    <a class="tab {% if recommendation == 'buy' %}active{% endif %}" href="/results?recommendation=buy{% if category %}&category={{ category }}{% endif %}">BUY</a>
+    <a class="tab {% if recommendation == 'watch' %}active{% endif %}" href="/results?recommendation=watch{% if category %}&category={{ category }}{% endif %}" style="margin-left:4px">WATCH</a>
+    <a class="tab {% if recommendation == 'skip' %}active{% endif %}" href="/results?recommendation=skip{% if category %}&category={{ category }}{% endif %}" style="margin-left:4px">SKIP</a>
+  </div>
+  <div>
+    <span style="color:var(--muted);font-size:12px;margin-right:8px">カテゴリ:</span>
+    <a class="tab {% if not category %}active{% endif %}" href="/results?recommendation={{ recommendation }}">すべて</a>
+    <a class="tab {% if category == 'game' %}active{% endif %}" href="/results?recommendation={{ recommendation }}&category=game" style="margin-left:4px">ゲーム</a>
+    <a class="tab {% if category == 'audio' %}active{% endif %}" href="/results?recommendation={{ recommendation }}&category=audio" style="margin-left:4px">オーディオ</a>
+  </div>
+  <span style="color:var(--muted);font-size:12px">{{ rows|length }} 件</span>
+</div>
+
+<div class="card">
+  {% if rows %}
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>商品名</th>
+          <th>仕入れ</th>
+          <th>送料(見積)</th>
+          <th>eBay均値</th>
+          <th>推定利益</th>
+          <th>利益率</th>
+          <th>販売数</th>
+          <th>カテゴリ</th>
+          <th>ソース</th>
+          <th>発見日</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td style="max-width:300px">
+            <a class="item-link" href="{{ r['url'] }}" target="_blank" rel="noopener">
+              {{ r['title'][:55] }}{% if r['title']|length > 55 %}…{% endif %}
+            </a>
+            {% if r['condition'] %}<br><span style="color:var(--muted);font-size:11px">{{ r['condition'] }}</span>{% endif %}
+          </td>
+          <td>¥{{ "{:,}".format(r['price_jpy']) }}</td>
+          <td style="color:var(--muted)">¥{{ "{:,}".format(r['estimated_shipping_jpy']) }}</td>
+          <td>${{ "%.0f"|format(r['ebay_avg_price_usd']) }}</td>
+          <td class="{% if r['estimated_profit_jpy'] >= 10000 %}profit-high{% elif r['estimated_profit_jpy'] >= 3000 %}profit-med{% endif %}">
+            ¥{{ "{:,}".format(r['estimated_profit_jpy']) }}
+          </td>
+          <td>{{ "%.0f"|format(r['profit_rate'] * 100) }}%</td>
+          <td>{{ r['ebay_sold_count'] }}</td>
+          <td><span class="badge badge-{{ r['category'] }}">{{ r['category'] }}</span></td>
+          <td><span class="badge badge-{{ r['source'] }}">{{ r['source'] }}</span></td>
+          <td style="color:var(--muted)">{{ r['found_date'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p style="color:var(--muted);padding:24px 0;text-align:center">該当する結果がありません。</p>
+  {% endif %}
+</div>
+{% endblock %}

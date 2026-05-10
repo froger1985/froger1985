@@ -15,6 +15,7 @@ from src.db.database import Database
 from src.db.models import SourceListing, WatchlistItem
 from src.scrapers.base import BaseScraper
 from src.scrapers.ebay import EbayAPI
+from src.scrapers.ebay_serpapi import EbaySerpAPI
 from src.scrapers.hardoff import HardOffScraper
 from src.scrapers.mercari import MercariScraper
 from src.scrapers.yahoo_auction import YahooAuctionScraper
@@ -45,7 +46,16 @@ async def run_pipeline(
 ):
     """Main sourcing pipeline: scrape → check eBay prices → calculate profit → alert."""
     db = Database(DB_PATH)
-    ebay = EbayAPI()
+    # Prefer SerpAPI for sold data; fall back to Browse API if key is missing
+    from src.config import EBAY_CLIENT_ID
+    serpapi = EbaySerpAPI()
+    ebay_browse = EbayAPI() if EBAY_CLIENT_ID else None
+
+    async def _get_ebay_data(title: str) -> dict:
+        data = await serpapi.get_average_sold_price(title, limit=60)
+        if data["sold_count"] == 0 and ebay_browse:
+            data = await ebay_browse.get_average_sold_price(title, limit=30)
+        return data
 
     # Get exchange rate
     rate = await get_usd_to_jpy()
@@ -102,8 +112,8 @@ async def run_pipeline(
     watch_count = 0
 
     for listing in new_listings:
-        # Check eBay sold prices
-        ebay_data = await ebay.get_average_sold_price(listing.title, limit=30)
+        # Check eBay sold prices (SerpAPI preferred, Browse API fallback)
+        ebay_data = await _get_ebay_data(listing.title)
 
         if ebay_data["sold_count"] == 0:
             db.update_listing_status(listing.id, "analyzed")
@@ -139,7 +149,9 @@ async def run_pipeline(
     # Cleanup
     for scraper in scrapers:
         await scraper.close()
-    await ebay.close()
+    await serpapi.close()
+    if ebay_browse:
+        await ebay_browse.close()
     db.close()
 
     logger.info(
