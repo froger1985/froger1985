@@ -17,7 +17,7 @@ CONDITION_MAP: dict[str, int] = {
 CONDITION_LABEL: dict[int, str] = {
     1000: "New",
     1500: "New other",
-    3000: "Very Good",
+    3000: "Used",
     4000: "Good",
     5000: "Acceptable",
     7000: "For parts",
