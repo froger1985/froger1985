@@ -298,6 +298,8 @@ def status():
 
 async def run_fetch_details_pipeline(source: str, limit: int) -> None:
     from src.scrapers.mercari_item import MercariItemFetcher
+    from src.web.ebay_api import EbayListingAPI
+    from src.web.ebay_auth import EbayAuth
 
     db = Database(DB_PATH)
     targets = db.get_listings_without_details(source=source, limit=limit)
@@ -309,7 +311,9 @@ async def run_fetch_details_pipeline(source: str, limit: int) -> None:
 
     click.echo(f"{len(targets)}件の詳細を取得します（{CONFIG['scraping']['request_delay_sec']}秒間隔）...")
     fetcher = MercariItemFetcher()
-    ok = skip = 0
+    auth = EbayAuth()
+    ebay = EbayListingAPI(auth)
+    ok = skip = withdrawn = 0
 
     for i, listing in enumerate(targets, 1):
         details = await fetcher.fetch_details(listing.source_id)
@@ -325,13 +329,36 @@ async def run_fetch_details_pipeline(source: str, limit: int) -> None:
             extra_images=details["extra_images"],
             stock_state=details["stock_state"],
         )
-        stock_label = "売切" if "sold" in details["stock_state"].lower() or "out" in details["stock_state"].lower() else "販売中"
+
+        is_sold_out = not Database._is_in_stock(details["stock_state"]) and details["stock_state"]
+        stock_label = "売切" if is_sold_out else "販売中"
         click.echo(f"  [{i}/{len(targets)}] {stock_label} | {details['condition'] or '状態不明'} | {listing.title[:40]}")
         ok += 1
 
+        if is_sold_out and listing.ebay_listing_id:
+            sku = f"mercari_{listing.source_id}"
+            click.echo(f"    → eBay出品取り消し中: SKU={sku}")
+            try:
+                result = await ebay.end_listing(sku)
+                if result["success"]:
+                    db.conn.execute(
+                        "UPDATE source_listings SET ebay_listing_id=NULL, status='new' WHERE id=?",
+                        (listing.id,),
+                    )
+                    db.conn.commit()
+                    click.echo(f"    ✓ 取り消し完了")
+                    withdrawn += 1
+                else:
+                    click.echo(f"    ✗ 取り消し失敗: {result.get('error', '不明なエラー')}")
+            except Exception as e:
+                click.echo(f"    ✗ エラー: {e}")
+
     await fetcher.close()
     db.close()
-    click.echo(f"\n完了: {ok}件更新, {skip}件スキップ")
+    msg = f"\n完了: {ok}件更新, {skip}件スキップ"
+    if withdrawn:
+        msg += f", {withdrawn}件eBay取り消し"
+    click.echo(msg)
 
 
 async def run_likes_pipeline(save: bool, limit: int) -> None:
