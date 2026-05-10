@@ -128,6 +128,17 @@ class Database:
         rows = self.conn.execute(query, params).fetchall()
         return [self._row_to_listing(r) for r in rows]
 
+    def get_ebay_listed_listings(self, source: str | None = None) -> list[SourceListing]:
+        """eBayに出品中（ebay_listing_id あり）の商品を返す。売切れ定期チェック用。"""
+        query = "SELECT * FROM source_listings WHERE ebay_listing_id IS NOT NULL"
+        params: list = []
+        if source:
+            query += " AND source = ?"
+            params.append(source)
+        query += " ORDER BY found_at DESC"
+        rows = self.conn.execute(query, params).fetchall()
+        return [self._row_to_listing(r) for r in rows]
+
     def update_listing_details(
         self, listing_id: int, condition: str, description: str,
         extra_images: str, stock_state: str,

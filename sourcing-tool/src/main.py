@@ -302,14 +302,29 @@ async def run_fetch_details_pipeline(source: str, limit: int) -> None:
     from src.web.ebay_auth import EbayAuth
 
     db = Database(DB_PATH)
-    targets = db.get_listings_without_details(source=source, limit=limit)
+
+    # 詳細未取得の商品（初回フェッチ）
+    without_details = db.get_listings_without_details(source=source, limit=limit)
+    # eBay出品中の商品（売切れ定期チェック）
+    listed = db.get_ebay_listed_listings(source=source)
+
+    # 重複を除外してマージ（出品中を優先して先頭に）
+    seen_ids: set[int] = set()
+    targets: list = []
+    for listing in listed + without_details:
+        if listing.id not in seen_ids:
+            seen_ids.add(listing.id)
+            targets.append(listing)
 
     if not targets:
-        click.echo("詳細未取得の商品がありません。")
+        click.echo("処理対象の商品がありません。")
         db.close()
         return
 
-    click.echo(f"{len(targets)}件の詳細を取得します（{CONFIG['scraping']['request_delay_sec']}秒間隔）...")
+    listed_count = len(listed)
+    new_count = len([l for l in without_details if l.id not in {x.id for x in listed}])
+    click.echo(f"出品中: {listed_count}件（売切れチェック）, 詳細未取得: {new_count}件  合計 {len(targets)}件")
+    click.echo(f"（{CONFIG['scraping']['request_delay_sec']}秒間隔）...")
     fetcher = MercariItemFetcher()
     auth = EbayAuth()
     ebay = EbayListingAPI(auth)
