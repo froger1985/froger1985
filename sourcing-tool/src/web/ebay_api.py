@@ -16,6 +16,15 @@ CONDITION_ENUM: dict[int, str] = {
     7000: "FOR_PARTS_OR_NOT_WORKING",
 }
 
+# カテゴリが特定の条件を受け付けない場合のフォールバック順
+_CONDITION_FALLBACK: list[str] = [
+    "USED_VERY_GOOD",
+    "USED_GOOD",
+    "USED_ACCEPTABLE",
+    "LIKE_NEW",
+    "NEW",
+]
+
 
 class EbayListingAPI:
     def __init__(self, auth):
@@ -241,9 +250,18 @@ class EbayListingAPI:
             else:
                 return {"success": False, "error": f"offer: {r.status_code} {r.text[:200]}"}
 
-            # Step 3: Publish offer (loop to fill missing item specifics one at a time)
+            # Step 3: Publish offer
+            # Loop handles two recoverable errors:
+            #   - missing item specifics (25007): add the aspect and retry
+            #   - invalid condition for category (25021/CONDITION_ID): try next condition in fallback chain
             aspects: dict[str, list[str]] = {}
-            for _ in range(10):
+            current_condition = condition
+            condition_fallback_idx = (
+                _CONDITION_FALLBACK.index(current_condition)
+                if current_condition in _CONDITION_FALLBACK
+                else -1
+            )
+            for _ in range(15):
                 r = await c.post(
                     f"{self.base}/sell/inventory/v1/offer/{offer_id}/publish",
                     headers=headers,
@@ -252,8 +270,31 @@ class EbayListingAPI:
                     break
                 if r.status_code != 400:
                     break
+
+                errors = r.json().get("errors", [])
+
+                # Invalid condition for this category → try next condition
+                if any(
+                    e.get("errorId") == 25021
+                    and any(p.get("value") == "CONDITION_ID" for p in e.get("parameters", []))
+                    for e in errors
+                ):
+                    condition_fallback_idx += 1
+                    if condition_fallback_idx >= len(_CONDITION_FALLBACK):
+                        break
+                    current_condition = _CONDITION_FALLBACK[condition_fallback_idx]
+                    print(f"[eBay] condition invalid for category, retrying with {current_condition}")
+                    inventory_body["condition"] = current_condition
+                    await c.put(
+                        f"{self.base}/sell/inventory/v1/inventory_item/{sku}",
+                        headers=headers,
+                        json=inventory_body,
+                    )
+                    continue
+
+                # Missing item specific → add it and retry
                 new_aspect = None
-                for e in r.json().get("errors", []):
+                for e in errors:
                     m = re.search(r"item specific (.+?) is missing", e.get("message", ""))
                     if m:
                         new_aspect = m.group(1)
@@ -268,6 +309,7 @@ class EbayListingAPI:
                     headers=headers,
                     json=inventory_body,
                 )
+
             if r.status_code != 200:
                 print(f"[eBay] FULL publish error: {r.text}")
                 return {"success": False, "error": f"publish: {r.status_code} {r.text[:200]}"}
