@@ -91,10 +91,10 @@ class EbayListingAPI:
         if resp.status_code != 200:
             print(f"[eBay conditions] {resp.status_code}: {resp.text[:200]}")
             return []
+        print(f"[eBay conditions] raw response: {resp.text[:500]}")
         policies = resp.json().get("conditionPolicies", [])
         if not policies:
             return []
-        # filter パラメータで絞り込んでいるので policies[0] が対象カテゴリ
         return [c["conditionEnum"] for c in policies[0].get("conditions", [])]
 
     async def end_listing(self, sku: str) -> dict:
