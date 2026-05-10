@@ -16,6 +16,11 @@ CONDITION_ENUM: dict[int, str] = {
     7000: "FOR_PARTS_OR_NOT_WORKING",
 }
 
+_CONDITION_FALLBACK: dict[str, str] = {
+    "USED_VERY_GOOD": "USED_GOOD",
+    "USED_GOOD": "USED_ACCEPTABLE",
+}
+
 _CONDITION_LABELS: dict[str, str] = {
     "NEW": "新品 (New)",
     "LIKE_NEW": "未使用に近い (Like New)",
@@ -335,15 +340,26 @@ class EbayListingAPI:
                 errors = r.json().get("errors", [])
                 print(f"[eBay publish error] status={r.status_code} errors={errors}")
 
-                # Invalid condition for this category → fetch valid conditions and return informative error
+                # Invalid condition → try fallback condition automatically
                 if any(
                     e.get("errorId") == 25021
                     and any(p.get("value") == "CONDITION_ID" for p in e.get("parameters", []))
                     for e in errors
                 ):
+                    fallback = _CONDITION_FALLBACK.get(condition)
+                    if fallback:
+                        print(f"[eBay] condition {condition} rejected, retrying with {fallback}")
+                        condition = fallback
+                        inventory_body["condition"] = condition
+                        await c.put(
+                            f"{self.base}/sell/inventory/v1/inventory_item/{sku}",
+                            headers=headers,
+                            json=inventory_body,
+                        )
+                        continue
                     valid = await self.get_valid_conditions(category_id)
                     if valid:
-                        labels = [_CONDITION_LABELS.get(v, v) for v in valid]
+                        labels = [_CONDITION_ID_LABELS.get(v, v) for v in valid]
                         return {
                             "success": False,
                             "error": (
