@@ -27,7 +27,7 @@ _CONDITION_LABELS: dict[str, str] = {
     "VERY_GOOD_REFURBISHED": "整備済み・良い",
     "GOOD_REFURBISHED": "整備済み・普通",
     "USED_EXCELLENT": "中古・非常に良い (Excellent)",
-    "USED_VERY_GOOD": "中古・良い (Very Good)",
+    "USED_VERY_GOOD": "目立った傷や汚れなし (Used)",
     "USED_GOOD": "中古・やや傷あり (Good)",
     "USED_ACCEPTABLE": "中古・傷・汚れあり (Acceptable)",
     "FOR_PARTS_OR_NOT_WORKING": "ジャンク (For Parts)",
