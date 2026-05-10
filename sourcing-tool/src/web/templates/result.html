@@ -38,7 +38,7 @@
     {% if r.success %}
     <p class="text-xs text-gray-400 mt-0.5">eBay ID: {{ r.listing_id }}</p>
     {% else %}
-    <p class="text-xs text-red-500 mt-0.5">{{ r.error }}</p>
+    <p class="text-xs text-red-500 mt-0.5 whitespace-pre-line">{{ r.error }}</p>
     {% endif %}
   </div>
 </div>

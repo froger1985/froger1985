@@ -16,14 +16,22 @@ CONDITION_ENUM: dict[int, str] = {
     7000: "FOR_PARTS_OR_NOT_WORKING",
 }
 
-# カテゴリが特定の条件を受け付けない場合のフォールバック順
-_CONDITION_FALLBACK: list[str] = [
-    "USED_VERY_GOOD",
-    "USED_GOOD",
-    "USED_ACCEPTABLE",
-    "LIKE_NEW",
-    "NEW",
-]
+_CONDITION_LABELS: dict[str, str] = {
+    "NEW": "新品 (New)",
+    "LIKE_NEW": "未使用に近い (Like New)",
+    "NEW_OTHER": "新品・その他 (New Other)",
+    "NEW_WITH_DEFECTS": "新品・難あり (New with defects)",
+    "MANUFACTURER_REFURBISHED": "メーカー整備済み",
+    "CERTIFIED_REFURBISHED": "認定整備済み",
+    "EXCELLENT_REFURBISHED": "整備済み・非常に良い",
+    "VERY_GOOD_REFURBISHED": "整備済み・良い",
+    "GOOD_REFURBISHED": "整備済み・普通",
+    "USED_EXCELLENT": "中古・非常に良い (Excellent)",
+    "USED_VERY_GOOD": "中古・良い (Very Good)",
+    "USED_GOOD": "中古・やや傷あり (Good)",
+    "USED_ACCEPTABLE": "中古・傷・汚れあり (Acceptable)",
+    "FOR_PARTS_OR_NOT_WORKING": "ジャンク (For Parts)",
+}
 
 
 class EbayListingAPI:
@@ -68,6 +76,48 @@ class EbayListingAPI:
                 aspects[name] = [title[:65]]
         print(f"[eBay aspects] required for category {category_id}: {list(aspects)}")
         return aspects
+
+    async def get_valid_conditions(self, category_id: str) -> list[str]:
+        """Return valid conditionEnum values for a category via Sell Metadata API."""
+        headers = await self._headers()
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            resp = await c.get(
+                f"{self.base}/sell/metadata/v1/marketplace/EBAY_US/get_item_condition_policies",
+                headers=headers,
+                params={"category_id": category_id},
+            )
+        if resp.status_code != 200:
+            print(f"[eBay conditions] {resp.status_code}: {resp.text[:200]}")
+            return []
+        policies = resp.json().get("conditionPolicies", [])
+        if not policies:
+            return []
+        return [c["conditionEnum"] for c in policies[0].get("conditions", [])]
+
+    async def end_listing(self, sku: str) -> dict:
+        """Withdraw (end) a published eBay listing by SKU."""
+        headers = await self._headers()
+        async with httpx.AsyncClient(timeout=15.0) as c:
+            r = await c.get(
+                f"{self.base}/sell/inventory/v1/offer",
+                headers=headers,
+                params={"sku": sku},
+            )
+            if r.status_code != 200:
+                return {"success": False, "error": f"オファー取得失敗: {r.status_code}"}
+            offers = r.json().get("offers", [])
+            if not offers:
+                return {"success": False, "error": "eBay上にオファーが見つかりません"}
+            offer_id = offers[0].get("offerId")
+            if not offer_id:
+                return {"success": False, "error": "offerId が取得できませんでした"}
+            r = await c.post(
+                f"{self.base}/sell/inventory/v1/offer/{offer_id}/withdraw",
+                headers=headers,
+            )
+        if r.status_code in (200, 204):
+            return {"success": True}
+        return {"success": False, "error": f"取り消し失敗: {r.status_code} {r.text[:200]}"}
 
     async def get_category_suggestions(self, query: str) -> list[dict]:
         token = await self.auth.get_app_token()
@@ -251,17 +301,9 @@ class EbayListingAPI:
                 return {"success": False, "error": f"offer: {r.status_code} {r.text[:200]}"}
 
             # Step 3: Publish offer
-            # Loop handles two recoverable errors:
-            #   - missing item specifics (25007): add the aspect and retry
-            #   - invalid condition for category (25021/CONDITION_ID): try next condition in fallback chain
+            # Loop handles missing item specifics: add the aspect and retry
             aspects: dict[str, list[str]] = {}
-            current_condition = condition
-            condition_fallback_idx = (
-                _CONDITION_FALLBACK.index(current_condition)
-                if current_condition in _CONDITION_FALLBACK
-                else -1
-            )
-            for _ in range(15):
+            for _ in range(10):
                 r = await c.post(
                     f"{self.base}/sell/inventory/v1/offer/{offer_id}/publish",
                     headers=headers,
@@ -273,24 +315,31 @@ class EbayListingAPI:
 
                 errors = r.json().get("errors", [])
 
-                # Invalid condition for this category → try next condition
+                # Invalid condition for this category → fetch valid conditions and return informative error
                 if any(
                     e.get("errorId") == 25021
                     and any(p.get("value") == "CONDITION_ID" for p in e.get("parameters", []))
                     for e in errors
                 ):
-                    condition_fallback_idx += 1
-                    if condition_fallback_idx >= len(_CONDITION_FALLBACK):
-                        break
-                    current_condition = _CONDITION_FALLBACK[condition_fallback_idx]
-                    print(f"[eBay] condition invalid for category, retrying with {current_condition}")
-                    inventory_body["condition"] = current_condition
-                    await c.put(
-                        f"{self.base}/sell/inventory/v1/inventory_item/{sku}",
-                        headers=headers,
-                        json=inventory_body,
-                    )
-                    continue
+                    valid = await self.get_valid_conditions(category_id)
+                    if valid:
+                        labels = [_CONDITION_LABELS.get(v, v) for v in valid]
+                        return {
+                            "success": False,
+                            "error": (
+                                f"コンディション「{_CONDITION_LABELS.get(condition, condition)}」は"
+                                f"このカテゴリ（ID: {category_id}）では使用できません。\n"
+                                f"使用可能なコンディション:\n"
+                                + "\n".join(f"  ・{l}" for l in labels)
+                            ),
+                            "error_type": "invalid_condition",
+                            "valid_conditions": valid,
+                        }
+                    return {
+                        "success": False,
+                        "error": f"コンディション「{_CONDITION_LABELS.get(condition, condition)}」はこのカテゴリで使用できません。編集画面でコンディションを変更してください。",
+                        "error_type": "invalid_condition",
+                    }
 
                 # Missing item specific → add it and retry
                 new_aspect = None

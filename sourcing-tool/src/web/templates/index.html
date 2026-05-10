@@ -95,6 +95,11 @@
               {% endif %}
               {% if tab == 'listed' and l.ebay_listing_id %}
               <span class="text-xs text-green-600 truncate max-w-24">{{ l.ebay_listing_id }}</span>
+              <button type="button"
+                      onclick="event.stopPropagation(); endListing({{ l.id }}, this)"
+                      class="text-xs text-red-500 border border-red-200 px-2 py-0.5 rounded-full hover:bg-red-50 ml-auto flex-shrink-0">
+                取り消し
+              </button>
               {% endif %}
             </div>
           </div>
@@ -522,6 +527,37 @@ async function saveCurrentItem() {
   }
   btn.textContent = '保存する';
   btn.disabled = false;
+}
+
+async function endListing(id, btnEl) {
+  if (!confirm('この商品の出品を取り消しますか？\neBay上の出品も削除されます。')) return;
+  btnEl.textContent = '処理中...';
+  btnEl.disabled = true;
+  try {
+    const resp = await fetch('/item/' + id + '/end', { method: 'POST' });
+    const data = await resp.json();
+    if (data.success) {
+      showToast('出品を取り消しました');
+      const card = document.getElementById('item-' + id);
+      if (card) card.remove();
+      const countEl = document.querySelector('a[href="/?tab=listed"] span');
+      if (countEl) countEl.textContent = Math.max(0, parseInt(countEl.textContent) - 1);
+      if (currentItemId === id) {
+        document.getElementById('editPlaceholder')?.classList.remove('hidden');
+        document.getElementById('editContent')?.classList.add('hidden');
+        document.getElementById('mobileOverlay')?.classList.add('hidden');
+        currentItemId = null;
+      }
+    } else {
+      showToast('取り消し失敗: ' + (data.error || '不明なエラー'), 'error');
+      btnEl.textContent = '取り消し';
+      btnEl.disabled = false;
+    }
+  } catch(e) {
+    showToast('通信エラー', 'error');
+    btnEl.textContent = '取り消し';
+    btnEl.disabled = false;
+  }
 }
 
 function showToast(msg, type = 'success') {

@@ -224,6 +224,26 @@ async def list_items(request: Request):
     })
 
 
+@app.post("/item/{item_id}/end")
+async def end_item(item_id: int):
+    db = Database(DB_PATH)
+    listing = db.get_listing_by_id(item_id)
+    if not listing or not listing.ebay_listing_id:
+        db.close()
+        return JSONResponse({"success": False, "error": "出品情報が見つかりません"})
+    ebay = EbayListingAPI(_auth)
+    sku = f"mercari_{listing.source_id}"
+    result = await ebay.end_listing(sku)
+    if result["success"]:
+        db.conn.execute(
+            "UPDATE source_listings SET ebay_listing_id=NULL, status='new' WHERE id=?",
+            (item_id,),
+        )
+        db.conn.commit()
+    db.close()
+    return JSONResponse(result)
+
+
 @app.get("/auth/ebay")
 async def auth_ebay():
     return RedirectResponse(_auth.get_auth_url())
