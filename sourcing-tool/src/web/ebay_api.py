@@ -231,6 +231,7 @@ class EbayListingAPI:
     ) -> dict:
         headers = await self._headers()
         condition = CONDITION_ENUM.get(condition_id, "USED_GOOD")
+        original_condition = condition
 
         required_aspects = await self._get_required_aspects(category_id, title)
 
@@ -399,4 +400,10 @@ class EbayListingAPI:
             if r.status_code != 200:
                 print(f"[eBay] FULL publish error: {r.text}")
                 return {"success": False, "error": f"publish: {r.status_code} {r.text[:200]}"}
-            return {"success": True, "listing_id": r.json().get("listingId", "")}
+            result = {"success": True, "listing_id": r.json().get("listingId", "")}
+            if condition != original_condition:
+                result["condition_warning"] = (
+                    f"コンディションを「{_CONDITION_LABELS.get(original_condition, original_condition)}」から"
+                    f"「{_CONDITION_LABELS.get(condition, condition)}」に自動変更して出品しました。"
+                )
+            return result

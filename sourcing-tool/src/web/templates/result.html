@@ -37,6 +37,9 @@
     <p class="text-sm font-medium text-gray-800">{{ r.title }}</p>
     {% if r.success %}
     <p class="text-xs text-gray-400 mt-0.5">eBay ID: {{ r.listing_id }}</p>
+    {% if r.condition_warning %}
+    <p class="text-xs text-yellow-600 mt-1">⚠️ {{ r.condition_warning }}</p>
+    {% endif %}
     {% else %}
     <p class="text-xs text-red-500 mt-0.5 whitespace-pre-line">{{ r.error }}</p>
     {% endif %}

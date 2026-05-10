@@ -244,6 +244,7 @@ async def list_items(request: Request):
             "success": result["success"],
             "listing_id": result.get("listing_id", ""),
             "error": result.get("error", ""),
+            "condition_warning": result.get("condition_warning", ""),
         })
 
     db.close()
