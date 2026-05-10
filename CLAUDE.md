@@ -8,6 +8,12 @@ Personal eBay export resale tool. Scrapes Mercari Japan for sourcing candidates 
 
 The root also contains `ebay_sold_analyzer.py` (standalone legacy script run by GitHub Actions weekly) and `index.html`/`main.js`/`Code.gs` (unrelated Google Apps Script project).
 
+## Session conventions
+
+- **Shell**: PowerShell — use `;` not `&&` when chaining commands
+- **After pushing changes**, always show the restart command: `git pull ; python -m src.main ui`
+  (run from `sourcing-tool/`, port 8000)
+
 ## Commands
 
 All commands must be run from `sourcing-tool/`:
