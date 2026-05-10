@@ -33,6 +33,18 @@ _CONDITION_LABELS: dict[str, str] = {
     "FOR_PARTS_OR_NOT_WORKING": "ジャンク (For Parts)",
 }
 
+# Metadata API の conditionId → 日本語ラベル
+_CONDITION_ID_LABELS: dict[str, str] = {
+    "1000": "新品、未使用 (New)",
+    "1500": "未使用に近い (New other)",
+    "2000": "認定整備済み (Certified Refurbished)",
+    "2500": "出品者整備済み (Seller Refurbished)",
+    "3000": "目立った傷や汚れなし (Used)",
+    "4000": "やや傷や汚れあり (Good)",
+    "5000": "傷や汚れあり (Acceptable)",
+    "7000": "全体的に状態が悪い (For Parts)",
+}
+
 
 class EbayListingAPI:
     def __init__(self, auth):
@@ -80,7 +92,7 @@ class EbayListingAPI:
         return aspects
 
     async def get_valid_conditions(self, category_id: str) -> list[str]:
-        """Return valid conditionEnum values for a category via Sell Metadata API."""
+        """Return human-readable valid condition labels for a category via Sell Metadata API."""
         headers = await self._headers()
         async with httpx.AsyncClient(timeout=10.0) as c:
             resp = await c.get(
@@ -91,11 +103,15 @@ class EbayListingAPI:
         if resp.status_code != 200:
             print(f"[eBay conditions] {resp.status_code}: {resp.text[:200]}")
             return []
-        print(f"[eBay conditions] raw response: {resp.text[:500]}")
-        policies = resp.json().get("conditionPolicies", [])
+        policies = resp.json().get("itemConditionPolicies", [])
         if not policies:
             return []
-        return [c["conditionEnum"] for c in policies[0].get("conditions", [])]
+        # 対象カテゴリのポリシーを探す。見つからなければ最初のものを使用
+        policy = next((p for p in policies if p.get("categoryId") == category_id), policies[0])
+        return [
+            _CONDITION_ID_LABELS.get(c["conditionId"], c.get("conditionDescription", c["conditionId"]))
+            for c in policy.get("itemConditions", [])
+        ]
 
     async def end_listing(self, sku: str) -> dict:
         """Withdraw (end) a published eBay listing by SKU."""
