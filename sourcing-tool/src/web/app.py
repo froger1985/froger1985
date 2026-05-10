@@ -100,16 +100,25 @@ async def edit_item(request: Request, item_id: int):
 @app.post("/item/{item_id}/save")
 async def save_item(request: Request, item_id: int):
     form = await request.form()
+    try:
+        shipping_usd = float(form.get("shipping_usd", 0))
+        margin = float(form.get("margin_pct", 15)) / 100
+        condition_id = int(form.get("condition_id", 3000))
+        price_usd = float(form.get("ebay_price_usd", 0))
+    except (ValueError, TypeError):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JSONResponse({"ok": False, "error": "入力値が不正です"}, status_code=400)
+        return RedirectResponse("/", status_code=303)
     db = Database(DB_PATH)
     db.update_listing_fields(
         listing_id=item_id,
         listing_title=str(form.get("title", "")),
         listing_description=str(form.get("description", "")),
-        listing_shipping_usd=float(form.get("shipping_usd", 0)),
-        listing_margin=float(form.get("margin_pct", 15)) / 100,
-        ebay_condition_id=int(form.get("condition_id", 3000)),
+        listing_shipping_usd=shipping_usd,
+        listing_margin=margin,
+        ebay_condition_id=condition_id,
         listing_category_id=str(form.get("category_id", "")) or None,
-        ebay_price_usd=float(form.get("ebay_price_usd", 0)),
+        ebay_price_usd=price_usd,
     )
     db.close()
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -186,12 +195,21 @@ async def list_items(request: Request):
     results = []
     for item_id in item_ids:
         listing = db.get_listing_by_id(item_id)
+        title_for_display = (listing.listing_title or listing.title)[:40] if listing else f"ID:{item_id}"
         if not listing or not listing.listing_category_id:
             results.append({
-                "title": (listing.listing_title or listing.title)[:40] if listing else f"ID:{item_id}",
+                "title": title_for_display,
                 "success": False,
                 "listing_id": "",
                 "error": "カテゴリが未設定です。編集画面で設定してください。",
+            })
+            continue
+        if not listing.ebay_price_usd or listing.ebay_price_usd <= 0:
+            results.append({
+                "title": title_for_display,
+                "success": False,
+                "listing_id": "",
+                "error": "eBay出品価格が未設定です。編集画面で価格を設定してください。",
             })
             continue
 
@@ -200,7 +218,7 @@ async def list_items(request: Request):
             sku=f"mercari_{listing.source_id}",
             title=(listing.listing_title or listing.title)[:80],
             description=listing.listing_description or listing.description or listing.title,
-            price_usd=listing.ebay_price_usd or 0,
+            price_usd=listing.ebay_price_usd,
             condition_id=listing.ebay_condition_id or 3000,
             category_id=listing.listing_category_id,
             image_urls=images,

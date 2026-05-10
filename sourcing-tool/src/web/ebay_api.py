@@ -41,6 +41,8 @@ class EbayListingAPI:
 
     async def _headers(self) -> dict:
         token = await self.auth.get_token()
+        if not token:
+            raise RuntimeError("eBay認証が切れています。再ログインしてください。")
         return {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
