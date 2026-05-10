@@ -214,18 +214,27 @@ async def list_items(request: Request):
             continue
 
         images = _parse_images(listing)
-        result = await ebay.create_listing(
-            sku=f"mercari_{listing.source_id}",
-            title=(listing.listing_title or listing.title)[:80],
-            description=listing.listing_description or listing.description or listing.title,
-            price_usd=listing.ebay_price_usd,
-            condition_id=listing.ebay_condition_id or 3000,
-            category_id=listing.listing_category_id,
-            image_urls=images,
-            fulfillment_policy_id=ff[0]["fulfillmentPolicyId"],
-            payment_policy_id=pay[0]["paymentPolicyId"],
-            return_policy_id=ret[0]["returnPolicyId"],
-        )
+        try:
+            result = await ebay.create_listing(
+                sku=f"mercari_{listing.source_id}",
+                title=(listing.listing_title or listing.title)[:80],
+                description=listing.listing_description or listing.description or listing.title,
+                price_usd=listing.ebay_price_usd,
+                condition_id=listing.ebay_condition_id or 3000,
+                category_id=listing.listing_category_id,
+                image_urls=images,
+                fulfillment_policy_id=ff[0]["fulfillmentPolicyId"],
+                payment_policy_id=pay[0]["paymentPolicyId"],
+                return_policy_id=ret[0]["returnPolicyId"],
+            )
+        except Exception as e:
+            results.append({
+                "title": title_for_display,
+                "success": False,
+                "listing_id": "",
+                "error": str(e),
+            })
+            continue
         if result["success"]:
             db.mark_as_listed(item_id, result["listing_id"])
         results.append({
