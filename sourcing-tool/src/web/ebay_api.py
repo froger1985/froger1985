@@ -333,6 +333,7 @@ class EbayListingAPI:
                     break
 
                 errors = r.json().get("errors", [])
+                print(f"[eBay publish error] status={r.status_code} errors={errors}")
 
                 # Invalid condition for this category → fetch valid conditions and return informative error
                 if any(
