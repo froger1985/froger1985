@@ -16,3 +16,6 @@ data/mercari_session.json
 # 一時デバッグスクリプト
 check_db.py
 debug_*.py
+
+# ログファイル（自動生成）
+logs/*.log
