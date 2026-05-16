@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>鳥居テーブル 設計図</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a1a;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      line-height: 1.7;
+      padding: 2rem 1.5rem;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    a { color: #00e5ff; text-decoration: none; }
+    a:hover { text-shadow: 0 0 10px #00e5ff88; }
+
+    nav { margin-bottom: 2rem; font-size: 0.9rem; letter-spacing: 2px; }
+
+    h1 {
+      font-size: 1.8rem;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #00e5ff;
+      text-shadow: 0 0 20px #00e5ff88;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      color: #aaa;
+      font-size: 0.9rem;
+      margin-bottom: 2.5rem;
+      letter-spacing: 1px;
+    }
+
+    h2 {
+      font-size: 1rem;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #00e5ff;
+      margin: 2.5rem 0 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid #00e5ff44;
+    }
+
+    h3 {
+      font-size: 0.85rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #aaa;
+      margin: 1.5rem 0 0.75rem;
+    }
+
+    .card {
+      background: #0f0f2a;
+      border: 1px solid #00e5ff44;
+      border-radius: 4px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th {
+      text-align: left;
+      color: #00e5ff;
+      font-size: 0.75rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #00e5ff44;
+    }
+
+    td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #ffffff11;
+      color: #ddd;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    .spec-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+
+    .spec-card {
+      background: #0f0f2a;
+      border: 1px solid #00e5ff44;
+      border-radius: 4px;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .spec-card .val {
+      font-size: 1.5rem;
+      color: #00e5ff;
+      font-weight: bold;
+      letter-spacing: 2px;
+    }
+
+    .spec-card .label {
+      font-size: 0.75rem;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .diagram-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    .diagram-item {
+      background: #0f0f2a;
+      border: 1px solid #00e5ff44;
+      border-radius: 4px;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .diagram-item figcaption {
+      font-size: 0.75rem;
+      color: #aaa;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 0.5rem;
+    }
+
+    .diagram-item svg { max-width: 100%; height: auto; }
+
+    .steps { counter-reset: step; }
+
+    .step {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      counter-increment: step;
+      min-width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      border: 1px solid #00e5ff;
+      color: #00e5ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+
+    .step-body strong { color: #00e5ff; }
+    .step-body p { color: #bbb; font-size: 0.9rem; margin-top: 0.2rem; }
+
+    details {
+      background: #0f0f2a;
+      border: 1px solid #00e5ff44;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    summary {
+      padding: 0.85rem 1.25rem;
+      cursor: pointer;
+      color: #00e5ff;
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+    }
+
+    summary:hover { background: #00e5ff11; }
+
+    .details-body {
+      padding: 0 1.25rem 1rem;
+      color: #bbb;
+      font-size: 0.9rem;
+    }
+
+    .note {
+      color: #aaa;
+      font-size: 0.8rem;
+      margin-top: 0.5rem;
+      padding: 0.6rem 0.75rem;
+      border-left: 2px solid #00e5ff44;
+    }
+
+    @media (max-width: 480px) {
+      h1 { font-size: 1.3rem; }
+      .diagram-grid { grid-template-columns: 1fr; }
+      .spec-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<nav><a href="index.html">← GAME</a></nav>
+
+<h1>鳥居テーブル 設計図</h1>
+<p class="subtitle">TORII TABLE — DIY CAMP SIDE TABLE / ¥440 / NO SCREWS</p>
+
+<!-- ── MATERIALS ────────────────────────────── -->
+<h2>材料</h2>
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>品番</th>
+        <th>名称</th>
+        <th>購入品</th>
+        <th>カット</th>
+        <th>数量</th>
+        <th>単価</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong style="color:#00e5ff">A</strong></td>
+        <td>脚板</td>
+        <td>ダイソー 桐材 B-5<br><small style="color:#888">150×400×9 mm</small></td>
+        <td>400mm → 300mm（1カット）</td>
+        <td>×2枚</td>
+        <td>110円</td>
+      </tr>
+      <tr>
+        <td><strong style="color:#00e5ff">B</strong></td>
+        <td>天板</td>
+        <td>ダイソー 桐材 B-5<br><small style="color:#888">150×400×9 mm</small></td>
+        <td>カットなし</td>
+        <td>×1枚</td>
+        <td>110円</td>
+      </tr>
+      <tr>
+        <td><strong style="color:#00e5ff">C</strong></td>
+        <td>棚板</td>
+        <td>ダイソー 桐材 B-5<br><small style="color:#888">150×400×9 mm</small></td>
+        <td>カットなし</td>
+        <td>×1枚</td>
+        <td>110円</td>
+      </tr>
+      <tr>
+        <td colspan="5" style="color:#aaa; font-size:0.85rem">合計</td>
+        <td><strong style="color:#00e5ff">440円</strong></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ── SPECS ───────────────────────────────── -->
+<h2>完成仕様</h2>
+<div class="spec-grid">
+  <div class="spec-card">
+    <div class="val">400<span style="font-size:1rem">mm</span></div>
+    <div class="label">幅 Width</div>
+  </div>
+  <div class="spec-card">
+    <div class="val">150<span style="font-size:1rem">mm</span></div>
+    <div class="label">奥行 Depth</div>
+  </div>
+  <div class="spec-card">
+    <div class="val">300<span style="font-size:1rem">mm</span></div>
+    <div class="label">高さ Height</div>
+  </div>
+  <div class="spec-card">
+    <div class="val">440<span style="font-size:1rem">円</span></div>
+    <div class="label">材料費 Cost</div>
+  </div>
+</div>
+<p class="note" style="margin-top:1rem">スロット寸法: 幅 9 mm × 深さ 75 mm &nbsp;|&nbsp; 天板高さ: 床から 270 mm &nbsp;|&nbsp; 棚板高さ: 床から 91 mm</p>
+
+<!-- ── DIAGRAMS ─────────────────────────────── -->
+<h2>切り出し図</h2>
+
+<h3>A — 脚板 × 2（150 × 300 mm、各1カット）</h3>
+<div class="diagram-item" style="max-width:320px">
+  <!-- Scale: 1px = 1mm, drawn at 0.8x then scaled with viewBox -->
+  <!-- Board: 150w × 300h. Scale 1.2px/mm. With margins. -->
+  <svg viewBox="0 0 260 430" xmlns="http://www.w3.org/2000/svg" style="max-width:100%">
+    <defs>
+      <marker id="arr" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto">
+        <polygon points="0 0,6 2.5,0 5" fill="#555"/>
+      </marker>
+      <marker id="arr2" markerWidth="6" markerHeight="5" refX="0" refY="2.5" orient="auto">
+        <polygon points="6 0,0 2.5,6 5" fill="#555"/>
+      </marker>
+    </defs>
+
+    <!-- Board body: 150mm × 300mm at scale 1.2px/mm = 180px × 360px, offset x=30,y=30 -->
+    <rect x="30" y="30" width="180" height="360" fill="#1a1a3a" stroke="#00e5ff" stroke-width="1.5"/>
+
+    <!-- Slot 1: top shelf slot at 30mm from top, 9mm tall, from inner edge (right) 75mm deep -->
+    <!-- inner edge = x=210, slot from x=210-90=120 to x=210, y=30+36=66 to y=66+11=77 -->
+    <rect x="120" y="66" width="90" height="11" fill="#0a0a1a" stroke="#00e5ff88" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="215" y="74" font-size="9" fill="#00e5ff88" font-family="Arial">S1</text>
+
+    <!-- Slot 2: bottom shelf slot at 200mm from top, 9mm tall, from inner edge 75mm deep -->
+    <!-- y = 30 + 200×1.2 = 30+240=270 -->
+    <rect x="120" y="270" width="90" height="11" fill="#0a0a1a" stroke="#00e5ff88" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="215" y="278" font-size="9" fill="#00e5ff88" font-family="Arial">S2</text>
+
+    <!-- "inner edge" label -->
+    <text x="118" y="26" font-size="8" fill="#555" font-family="Arial" text-anchor="middle">内側</text>
+
+    <!-- Width dimension: 150mm -->
+    <line x1="30" y1="12" x2="210" y2="12" stroke="#555" stroke-width="1" marker-start="url(#arr2)" marker-end="url(#arr)"/>
+    <text x="120" y="9" font-size="9" fill="#888" text-anchor="middle" font-family="Arial">150 mm</text>
+
+    <!-- Height dimension: 300mm -->
+    <line x1="225" y1="30" x2="225" y2="390" stroke="#555" stroke-width="1" marker-start="url(#arr2)" marker-end="url(#arr)"/>
+    <text x="237" y="215" font-size="9" fill="#888" text-anchor="middle" font-family="Arial" transform="rotate(90,237,215)">300 mm</text>
+
+    <!-- S1 position from top: 30mm -->
+    <line x1="15" y1="30" x2="15" y2="66" stroke="#00e5ff44" stroke-width="1" stroke-dasharray="3,2" marker-start="url(#arr2)" marker-end="url(#arr)"/>
+    <text x="12" y="50" font-size="8" fill="#00e5ff88" text-anchor="middle" font-family="Arial" transform="rotate(-90,12,50)">30 mm</text>
+
+    <!-- S2 position from S1: 200mm from top = y=270 -->
+    <line x1="15" y1="30" x2="15" y2="270" stroke="#00e5ff22" stroke-width="1" stroke-dasharray="2,3"/>
+    <text x="12" y="160" font-size="8" fill="#00e5ff66" text-anchor="middle" font-family="Arial" transform="rotate(-90,12,160)">200 mm</text>
+
+    <!-- Slot depth label -->
+    <line x1="120" y1="58" x2="210" y2="58" stroke="#00e5ff44" stroke-width="0.8" stroke-dasharray="2,2" marker-start="url(#arr2)" marker-end="url(#arr)"/>
+    <text x="165" y="55" font-size="8" fill="#00e5ff88" text-anchor="middle" font-family="Arial">75 mm</text>
+
+    <!-- Slot height label -->
+    <text x="68" y="75" font-size="8" fill="#888" font-family="Arial">9 mm</text>
+
+    <!-- Board label -->
+    <text x="75" y="200" font-size="30" fill="#00e5ff22" font-family="Arial" font-weight="bold">A</text>
+
+    <!-- Cut line annotation -->
+    <line x1="30" y1="420" x2="210" y2="420" stroke="#ff6644" stroke-width="1.5" stroke-dasharray="5,3"/>
+    <text x="120" y="417" font-size="8" fill="#ff6644" text-anchor="middle" font-family="Arial">← カット位置（400→300mm）</text>
+  </svg>
+  <figcaption>A — 脚板（内側面から見た図）</figcaption>
+</div>
+
+<h3>B — 天板 × 1（150 × 400 mm、カットなし）</h3>
+<div class="diagram-item">
+  <!-- 400mm × 150mm. Scale: 1.2px/mm. 480px × 180px -->
+  <svg viewBox="0 0 560 240" xmlns="http://www.w3.org/2000/svg" style="max-width:100%">
+    <defs>
+      <marker id="arr3" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto">
+        <polygon points="0 0,6 2.5,0 5" fill="#555"/>
+      </marker>
+      <marker id="arr4" markerWidth="6" markerHeight="5" refX="0" refY="2.5" orient="auto">
+        <polygon points="6 0,0 2.5,6 5" fill="#555"/>
+      </marker>
+    </defs>
+
+    <!-- Board: 400mm × 150mm = 480px × 180px, offset x=40,y=30 -->
+    <rect x="40" y="30" width="480" height="180" fill="#1a1a3a" stroke="#00e5ff" stroke-width="1.5"/>
+
+    <!-- Left slot notch (inner end, from bottom 75mm): x=40, y=30+180-90=120, w=11, h=90 -->
+    <rect x="40" y="120" width="11" height="90" fill="#0a0a1a" stroke="#00e5ff88" stroke-width="1" stroke-dasharray="3,2"/>
+
+    <!-- Right slot notch -->
+    <rect x="509" y="120" width="11" height="90" fill="#0a0a1a" stroke="#00e5ff88" stroke-width="1" stroke-dasharray="3,2"/>
+
+    <!-- Width dimension: 400mm -->
+    <line x1="40" y1="14" x2="520" y2="14" stroke="#555" stroke-width="1" marker-start="url(#arr4)" marker-end="url(#arr3)"/>
+    <text x="280" y="11" font-size="9" fill="#888" text-anchor="middle" font-family="Arial">400 mm</text>
+
+    <!-- Height dimension: 150mm -->
+    <line x1="535" y1="30" x2="535" y2="210" stroke="#555" stroke-width="1" marker-start="url(#arr4)" marker-end="url(#arr3)"/>
+    <text x="548" y="125" font-size="9" fill="#888" text-anchor="middle" font-family="Arial" transform="rotate(90,548,125)">150 mm</text>
+
+    <!-- Notch depth: 75mm -->
+    <line x1="40" y1="118" x2="40" y2="30" stroke="#00e5ff44" stroke-width="0.8" stroke-dasharray="2,2" marker-start="url(#arr4)" marker-end="url(#arr3)"/>
+    <text x="37" y="78" font-size="8" fill="#00e5ff88" text-anchor="end" font-family="Arial" transform="rotate(-90,37,78)">75 mm</text>
+
+    <!-- Notch width: 9mm -->
+    <text x="46" y="228" font-size="8" fill="#888" font-family="Arial" text-anchor="middle">9 mm</text>
+
+    <!-- Label -->
+    <text x="280" y="135" font-size="40" fill="#00e5ff22" font-family="Arial" font-weight="bold" text-anchor="middle">B</text>
+
+    <!-- Bottom annotation -->
+    <text x="60" y="228" font-size="8" fill="#aaa" font-family="Arial">← 端のノッチはS1スロットに差し込む方向（両端対称）</text>
+  </svg>
+  <figcaption>B — 天板（下面から見た図、両端にスロット用ノッチ）</figcaption>
+</div>
+
+<h3>C — 棚板 × 1（150 × 400 mm、カットなし）</h3>
+<div class="diagram-item">
+  <svg viewBox="0 0 560 240" xmlns="http://www.w3.org/2000/svg" style="max-width:100%">
+    <defs>
+      <marker id="arr5" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto">
+        <polygon points="0 0,6 2.5,0 5" fill="#555"/>
+      </marker>
+      <marker id="arr6" markerWidth="6" markerHeight="5" refX="0" refY="2.5" orient="auto">
+        <polygon points="6 0,0 2.5,6 5" fill="#555"/>
+      </marker>
+    </defs>
+
+    <!-- Board -->
+    <rect x="40" y="30" width="480" height="180" fill="#1a1a3a" stroke="#00e5ff" stroke-width="1.5"/>
+
+    <!-- Left notch (from top, 75mm deep): for S2 (bottom shelf slides via inner edge) -->
+    <rect x="40" y="30" width="11" height="90" fill="#0a0a1a" stroke="#00e5ff88" stroke-width="1" stroke-dasharray="3,2"/>
+    <!-- Right notch -->
+    <rect x="509" y="30" width="11" height="90" fill="#0a0a1a" stroke="#00e5ff88" stroke-width="1" stroke-dasharray="3,2"/>
+
+    <!-- Width -->
+    <line x1="40" y1="14" x2="520" y2="14" stroke="#555" stroke-width="1" marker-start="url(#arr6)" marker-end="url(#arr5)"/>
+    <text x="280" y="11" font-size="9" fill="#888" text-anchor="middle" font-family="Arial">400 mm</text>
+
+    <!-- Height -->
+    <line x1="535" y1="30" x2="535" y2="210" stroke="#555" stroke-width="1" marker-start="url(#arr6)" marker-end="url(#arr5)"/>
+    <text x="548" y="125" font-size="9" fill="#888" text-anchor="middle" font-family="Arial" transform="rotate(90,548,125)">150 mm</text>
+
+    <!-- Notch depth -->
+    <line x1="40" y1="30" x2="40" y2="120" stroke="#00e5ff44" stroke-width="0.8" stroke-dasharray="2,2" marker-start="url(#arr6)" marker-end="url(#arr5)"/>
+    <text x="37" y="78" font-size="8" fill="#00e5ff88" text-anchor="end" font-family="Arial" transform="rotate(-90,37,78)">75 mm</text>
+
+    <!-- Label -->
+    <text x="280" y="135" font-size="40" fill="#00e5ff22" font-family="Arial" font-weight="bold" text-anchor="middle">C</text>
+
+    <text x="60" y="228" font-size="8" fill="#aaa" font-family="Arial">← 端のノッチはS2スロットに差し込む方向（両端対称）</text>
+  </svg>
+  <figcaption>C — 棚板（上面から見た図、両端にスロット用ノッチ）</figcaption>
+</div>
+
+<!-- ── ASSEMBLY VIEW ─────────────────────────── -->
+<h2>組立概観</h2>
+<div class="diagram-item" style="max-width:460px">
+  <svg viewBox="0 0 500 420" xmlns="http://www.w3.org/2000/svg" style="max-width:100%">
+    <!-- Front view of assembled table -->
+    <!-- Legs: x=40(left) and x=440(right), each 9mm wide, 300mm tall, at y=60 -->
+    <!-- Left leg -->
+    <rect x="40" y="60" width="11" height="360" fill="#1a2a3a" stroke="#00e5ff" stroke-width="1.5"/>
+    <!-- Right leg -->
+    <rect x="449" y="60" width="11" height="360" fill="#1a2a3a" stroke="#00e5ff" stroke-width="1.5"/>
+
+    <!-- Top shelf B: 9mm tall at y=96 (30mm from top of leg = 36px at 1.2scale) -->
+    <rect x="40" y="96" width="420" height="11" fill="#2a2a4a" stroke="#00e5ff" stroke-width="1.5"/>
+
+    <!-- Bottom shelf C: 9mm tall at y=300 (200mm from top = 240px) -->
+    <rect x="40" y="300" width="420" height="11" fill="#2a2a4a" stroke="#00e5ff" stroke-width="1.5"/>
+
+    <!-- Label: A (legs) -->
+    <text x="20" y="250" font-size="14" fill="#00e5ff" font-family="Arial" font-weight="bold" text-anchor="middle">A</text>
+    <text x="480" y="250" font-size="14" fill="#00e5ff" font-family="Arial" font-weight="bold" text-anchor="middle">A</text>
+
+    <!-- Label: B (top shelf) -->
+    <text x="250" y="93" font-size="12" fill="#00e5ff" font-family="Arial" text-anchor="middle">B — 天板</text>
+
+    <!-- Label: C (bottom shelf) -->
+    <text x="250" y="325" font-size="12" fill="#00e5ff" font-family="Arial" text-anchor="middle">C — 棚板</text>
+
+    <!-- Leg extends above shelf: 30mm = 36px, from y=60 to y=96 -->
+    <line x1="455" y1="60" x2="490" y2="60" stroke="#00e5ff44" stroke-width="0.8" stroke-dasharray="2,2"/>
+    <line x1="455" y1="96" x2="490" y2="96" stroke="#00e5ff44" stroke-width="0.8" stroke-dasharray="2,2"/>
+    <line x1="490" y1="60" x2="490" y2="96" stroke="#555" stroke-width="1" marker-start="url(#arr2)" marker-end="url(#arr)"/>
+    <text x="494" y="81" font-size="8" fill="#888" font-family="Arial">30mm</text>
+
+    <!-- Total height dimension -->
+    <line x1="25" y1="60" x2="25" y2="420" stroke="#555" stroke-width="1" marker-start="url(#arr2)" marker-end="url(#arr)"/>
+    <text x="22" y="245" font-size="9" fill="#888" text-anchor="middle" font-family="Arial" transform="rotate(-90,22,245)">300 mm</text>
+
+    <!-- Total width dimension -->
+    <line x1="40" y1="45" x2="460" y2="45" stroke="#555" stroke-width="1" marker-start="url(#arr2)" marker-end="url(#arr)"/>
+    <text x="250" y="42" font-size="9" fill="#888" text-anchor="middle" font-family="Arial">400 mm</text>
+
+    <!-- Floor line -->
+    <line x1="30" y1="420" x2="470" y2="420" stroke="#333" stroke-width="2"/>
+    <text x="250" y="416" font-size="8" fill="#444" text-anchor="middle" font-family="Arial">床 FLOOR</text>
+
+    <!-- Shelf heights from floor -->
+    <text x="10" y="105" font-size="8" fill="#00e5ff66" font-family="Arial" text-anchor="end">270mm</text>
+    <text x="10" y="310" font-size="8" fill="#00e5ff66" font-family="Arial" text-anchor="end">91mm</text>
+    <line x1="12" y1="96" x2="12" y2="420" stroke="#00e5ff22" stroke-width="0.8" stroke-dasharray="2,3"/>
+    <line x1="12" y1="300" x2="12" y2="420" stroke="#00e5ff22" stroke-width="0.8" stroke-dasharray="2,3"/>
+  </svg>
+  <figcaption>正面図（スケール 1.2 px/mm）</figcaption>
+</div>
+
+<!-- ── STEPS ─────────────────────────────────── -->
+<h2>組み立て手順</h2>
+<div class="card steps">
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <strong>脚板を切り出す</strong>
+      <p>B-5 を 2 枚、400 mm → 300 mm に直線カット（のこぎりで 1 本ずつ）。</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <strong>脚板にスロットを切る</strong>
+      <p>各脚板の<strong>内側面</strong>から、幅 9 mm × 深さ 75 mm のスロットを 2 か所加工する。</p>
+      <p style="margin-top:0.3rem">
+        <strong>S1（天板用）</strong>: 上端から 30 mm の位置<br>
+        <strong>S2（棚板用）</strong>: 上端から 200 mm の位置
+      </p>
+      <p>のこぎりで上下に 2 本切り込みを入れ、ノミで押し出す。</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <strong>天板・棚板の端を加工する</strong>
+      <p>天板（B）と棚板（C）の<strong>両端</strong>に 9 mm × 75 mm のノッチを入れる。
+         天板は下面から、棚板は上面から切る。</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <strong>組み立て</strong>
+      <p>脚板 2 枚を平置きにし、天板を S1 スロットに上から差し込む。棚板を S2 スロットに横からスライドして差し込む。起こして完成。</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── OPTIONAL ───────────────────────────────── -->
+<h2>オプション工程（後から追加可）</h2>
+
+<details>
+  <summary>☕ カップホール（φ76 mm）</summary>
+  <div class="details-body">
+    <p>天板中央にφ76 mm のホールソーで穴を開ける。シングルウォールのカップ・缶類がちょうど収まるサイズ。ドリルドライバー＋ホールソービット（76 mm）で1分以内に加工可能。</p>
+  </div>
+</details>
+
+<details>
+  <summary>🪢 パラコード締結（折り畳みまとめ用）</summary>
+  <div class="details-body">
+    <p>折り畳んだ状態でパラコードをぐるっと巻いて束ねる。棚板の端に小穴（φ4 mm）を開けてコードを通しておくと収納時に便利。</p>
+  </div>
+</details>
+
+</body>
+</html>
