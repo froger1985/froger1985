@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>シールあつめ大さくせん 〜めざせ支配人！〜</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --pink: #ff8fb1;
+    --pink-d: #ff5d8f;
+    --cream: #fff6ef;
+    --mint: #8ee3c8;
+    --yellow: #ffd84d;
+    --ink: #5a4a52;
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    background: linear-gradient(160deg, #ffe3ef 0%, #fff6ef 45%, #e6f7ff 100%);
+    font-family: "Hiragino Maru Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 12px;
+    overflow: hidden;
+  }
+
+  #app {
+    width: 100%;
+    max-width: 480px;
+    background: var(--cream);
+    border-radius: 24px;
+    box-shadow: 0 16px 40px rgba(255, 93, 143, 0.25);
+    border: 4px solid #fff;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .screen { display: none; padding: 22px 20px 26px; }
+  .screen.active { display: block; }
+
+  h1 { font-size: 1.55rem; color: var(--pink-d); text-align: center; line-height: 1.4; }
+  h2 { font-size: 1.2rem; color: var(--pink-d); margin-bottom: 10px; }
+  p { line-height: 1.6; }
+
+  .sub { text-align: center; color: var(--ink); opacity: .8; margin-top: 6px; font-size: .85rem; }
+
+  /* ---- buttons ---- */
+  .btn {
+    display: inline-block;
+    background: var(--pink);
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 13px 26px;
+    font-size: 1.05rem;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
+    box-shadow: 0 5px 0 var(--pink-d);
+    transition: transform .06s, box-shadow .06s;
+  }
+  .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--pink-d); }
+  .btn.mint { background: var(--mint); box-shadow: 0 5px 0 #4fc3a1; }
+  .btn.mint:active { box-shadow: 0 1px 0 #4fc3a1; }
+  .btn:disabled { background: #d9cfc9; box-shadow: 0 5px 0 #bcb1aa; cursor: not-allowed; opacity: .8; }
+  .center { text-align: center; }
+
+  /* ---- title ---- */
+  .mascot-row { font-size: 3.2rem; text-align: center; margin: 14px 0 6px; }
+  .mascot-row .hop { display: inline-block; animation: hop 1.1s ease-in-out infinite; }
+  .mascot-row .hop:nth-child(2) { animation-delay: .25s; }
+  @keyframes hop { 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-12px);} }
+
+  .name-box { margin: 18px 0; text-align: center; }
+  .name-box label { display: block; margin-bottom: 8px; font-weight: bold; }
+  #nameInput {
+    font-family: inherit; font-size: 1.1rem; text-align: center;
+    padding: 11px 14px; border: 3px solid var(--pink); border-radius: 14px;
+    width: 80%; max-width: 260px; color: var(--ink); background: #fff;
+  }
+  #nameInput:focus { outline: none; border-color: var(--pink-d); }
+
+  .speech {
+    background: #fff; border: 3px solid var(--mint); border-radius: 18px;
+    padding: 14px 16px; position: relative; margin: 6px 0 16px; line-height: 1.6;
+  }
+  .speech::before {
+    content: "🐹"; position: absolute; top: -26px; left: 12px; font-size: 2rem;
+    background: var(--cream); border-radius: 50%; padding: 0 4px;
+  }
+  .speech b { color: var(--pink-d); }
+
+  /* ---- sticker book ---- */
+  .book-title { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; }
+  .book {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    background: #fff; border: 3px dashed var(--pink); border-radius: 16px;
+    padding: 14px 12px; margin-bottom: 16px;
+  }
+  .slot {
+    aspect-ratio: 1 / 1; border-radius: 14px; background: #faf0ea;
+    display: flex; align-items: center; justify-content: center; position: relative;
+    border: 2px dashed #e7d3c9; font-size: 2rem; overflow: hidden;
+  }
+  .slot .silhouette { filter: grayscale(1) brightness(.55) opacity(.35); }
+  .slot.filled { border-style: solid; }
+  .slot .rate { position: absolute; bottom: 2px; right: 4px; font-size: .6rem; color: var(--pink-d); font-weight: bold; }
+
+  /* sticker visual tiers */
+  .sticker { font-size: 2.1rem; line-height: 1; }
+  .tier-water { animation: wobble 1.6s ease-in-out infinite; }
+  @keyframes wobble { 0%,100%{ transform: rotate(-7deg);} 50%{ transform: rotate(7deg);} }
+  .tier-shaka { position: relative; animation: shaka .25s linear infinite; }
+  @keyframes shaka { 0%{transform:translate(0,0)} 25%{transform:translate(1px,-1px)} 50%{transform:translate(-1px,1px)} 75%{transform:translate(1px,1px)} 100%{transform:translate(0,0)} }
+  .tier-bondoro {
+    text-shadow: 0 2px 0 #ffb3d9, 0 4px 6px rgba(255,93,143,.5);
+    animation: puff 1.4s ease-in-out infinite;
+  }
+  @keyframes puff { 0%,100%{ transform: scale(1);} 50%{ transform: scale(1.18);} }
+  .slot.filled.bondoro { background: linear-gradient(135deg,#fff0f6,#e9f6ff,#fff7e0); }
+
+  /* ---- task list ---- */
+  .task {
+    display: flex; align-items: center; gap: 12px; background: #fff;
+    border: 3px solid #ffe0ec; border-radius: 16px; padding: 12px 14px; margin-bottom: 10px;
+  }
+  .task .ico { font-size: 1.8rem; width: 40px; text-align: center; }
+  .task .meta { flex: 1; }
+  .task .meta .t { font-weight: bold; }
+  .task .meta .d { font-size: .8rem; opacity: .75; }
+  .task.done { opacity: .6; }
+  .task.locked { opacity: .5; filter: grayscale(.5); }
+  .task .go { font-size: .9rem; padding: 8px 16px; }
+  .badge { font-size: .7rem; background: var(--yellow); color: #7a5a00; padding: 2px 8px; border-radius: 999px; font-weight: bold; }
+
+  /* ---- canvas game ---- */
+  #gameWrap { padding: 10px; }
+  #gameHud {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: .95rem; font-weight: bold; padding: 4px 6px 10px;
+  }
+  #gameHud .hearts { color: var(--pink-d); }
+  canvas {
+    display: block; width: 100%; border-radius: 16px; background: #d7f0ff;
+    border: 3px solid #fff; box-shadow: inset 0 0 0 3px #bfe6ff;
+  }
+  #goal { text-align: center; margin: 8px 0 2px; font-weight: bold; color: var(--ink); }
+
+  /* ---- on-screen controls ---- */
+  #pad { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; gap: 10px; }
+  #pad .left-keys { display: flex; gap: 10px; }
+  .key {
+    width: 64px; height: 64px; border-radius: 18px; border: none; color: #fff;
+    font-size: 1.6rem; font-weight: bold; background: var(--mint); box-shadow: 0 5px 0 #4fc3a1;
+    cursor: pointer; user-select: none; touch-action: manipulation;
+  }
+  .key:active { transform: translateY(4px); box-shadow: 0 1px 0 #4fc3a1; }
+  .key.act { background: var(--pink); box-shadow: 0 5px 0 var(--pink-d); width: auto; padding: 0 18px; font-size: 1.05rem; }
+  .key.act:active { box-shadow: 0 1px 0 var(--pink-d); }
+  .key.hidden { display: none; }
+
+  /* ---- reward overlay ---- */
+  #reward, #ending { position: absolute; inset: 0; display: none; background: rgba(255,246,239,.97);
+    flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; z-index: 20; }
+  #reward.show, #ending.show { display: flex; }
+  .reward-card {
+    background: #fff; border-radius: 22px; padding: 22px; border: 4px solid var(--pink);
+    box-shadow: 0 12px 30px rgba(255,93,143,.3); animation: pop .4s ease; max-width: 320px;
+  }
+  @keyframes pop { 0%{ transform: scale(.4); opacity:0;} 70%{ transform: scale(1.08);} 100%{ transform: scale(1); opacity:1;} }
+  .reward-card .big { font-size: 4rem; margin: 6px 0; }
+  .reward-card .sname { font-size: 1.2rem; font-weight: bold; color: var(--pink-d); }
+  .reward-card .rate-line { color: var(--yellow); font-size: 1.1rem; letter-spacing: 2px; }
+
+  /* sparkles */
+  .spark { position: absolute; font-size: 1.4rem; pointer-events: none; animation: rise 1.1s ease-out forwards; z-index: 30; }
+  @keyframes rise { 0%{ transform: translateY(0) scale(.6); opacity: 1;} 100%{ transform: translateY(-90px) scale(1.3); opacity: 0;} }
+
+  /* ending */
+  #ending .cast { font-size: 3.6rem; margin: 10px 0; }
+  #ending .king { display:inline-block; animation: hop 1s ease-in-out infinite; }
+  .confetti { position: absolute; top: -20px; font-size: 1.2rem; animation: fall linear forwards; z-index: 25; }
+  @keyframes fall { to { transform: translateY(640px) rotate(540deg); opacity: .4; } }
+
+  .foot { text-align:center; font-size:.72rem; opacity:.6; margin-top:14px; }
+  .link-back { background:none; border:none; color:var(--pink-d); font-family:inherit; font-size:.9rem; cursor:pointer; text-decoration:underline; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== TITLE ===== -->
+  <section id="screen-title" class="screen active">
+    <div class="mascot-row"><span class="hop">🐰</span><span class="hop">🐹</span></div>
+    <h1>シールあつめ<br>大さくせん</h1>
+    <p class="sub">〜めざせ シールちょうの 支配人！〜</p>
+
+    <div class="speech" style="margin-top:34px;">
+      やあ！ ぼくは このシールちょうの <b>支配人ハムスター</b>。
+      きみがミッションを クリアしたら、<b>レアなシール</b>を あげるよ。
+      ぜんぶ あつめたら…… きみが つぎの支配人だ！
+    </div>
+
+    <div class="name-box">
+      <label for="nameInput">🐰 ウサギの なまえを きめてね</label>
+      <input id="nameInput" type="text" maxlength="8" placeholder="ぴょん太" autocomplete="off">
+    </div>
+
+    <div class="center">
+      <button id="startBtn" class="btn">ぼうけんを はじめる ▶</button>
+    </div>
+    <p class="foot">音が でます🔊 / キーボードでも スマホタップでも あそべます</p>
+  </section>
+
+  <!-- ===== HUB (sticker book) ===== -->
+  <section id="screen-hub" class="screen">
+    <div class="book-title">
+      <h2 id="hubTitle">🐰 ◯◯の シールちょう</h2>
+    </div>
+
+    <div class="speech" id="hubSpeech">
+      ようこそ <b id="speechName">ぴょん太</b>！ いまは「<b>シル活</b>」ブームだよ。
+      ミッションを えらんで、レアなシールを ゲットしよう！
+    </div>
+
+    <div class="book" id="book"></div>
+
+    <h2>📋 ハムスターの ミッション</h2>
+    <div id="taskList"></div>
+
+    <p class="foot">あつめたシール <b><span id="progressNum">0</span>/4</b> ／ シール交換の "レア度" を めざせ！</p>
+  </section>
+
+  <!-- ===== GAME ===== -->
+  <section id="screen-game" class="screen">
+    <div id="gameWrap">
+      <div id="gameHud">
+        <span id="hudTask">ミッション</span>
+        <span class="hearts" id="hudInfo">❤❤❤</span>
+      </div>
+      <canvas id="cv" width="440" height="300"></canvas>
+      <div id="goal">めざせゴール！</div>
+
+      <div id="pad">
+        <div class="left-keys">
+          <button class="key" data-k="left">◀</button>
+          <button class="key" data-k="right">▶</button>
+        </div>
+        <div class="right-keys">
+          <button class="key act" data-k="jump">ジャンプ</button>
+          <button class="key act" id="throwBtn" data-k="throw">なげる🥕</button>
+        </div>
+      </div>
+      <div class="center" style="margin-top:12px;">
+        <button class="link-back" id="giveUpBtn">← シールちょうに もどる</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== REWARD OVERLAY ===== -->
+  <div id="reward">
+    <div class="reward-card">
+      <p>🐹「よく がんばった！ ごほうびシールだ！」</p>
+      <div class="big" id="rewardEmoji">✨</div>
+      <div class="sname" id="rewardName">シール</div>
+      <div class="rate-line" id="rewardRate">★</div>
+      <p id="rewardDesc" style="font-size:.85rem; opacity:.8; margin:8px 0 16px;"></p>
+      <button class="btn mint" id="pasteBtn">シールちょうに はる！</button>
+    </div>
+  </div>
+
+  <!-- ===== ENDING ===== -->
+  <div id="ending">
+    <h1 style="color:var(--pink-d)">🎉 ぜんぶ あつめた！ 🎉</h1>
+    <div class="cast"><span class="king">👑🐰</span> 🐹</div>
+    <p id="endText" style="line-height:1.7; margin:6px 0 18px;"></p>
+    <button class="btn" id="endBtn">もういちど あそぶ</button>
+  </div>
+
+</div>
+
+<script>
+"use strict";
+
+/* =========================================================
+   サウンド (Web Audio API) — 外部ファイル無し
+   ========================================================= */
+let AC = null, master = null;
+function initAudio(){
+  if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  AC = new Ctx();
+  master = AC.createGain();
+  master.gain.value = 0.5;
+  master.connect(AC.destination);
+}
+function tone(freq, t0, dur, type='sine', vol=0.25){
+  if (!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t0);
+  o.connect(g); g.connect(master);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol, t0 + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.start(t0); o.stop(t0 + dur + 0.05);
+}
+// 「トゥルン、トゥルルルン！」のきれいなチャイム
+function playChime(){
+  initAudio(); if (!AC) return;
+  const t = AC.currentTime;
+  // トゥ・ルン
+  tone(523.25, t,        0.18, 'triangle', 0.30);
+  tone(659.25, t + 0.10, 0.22, 'triangle', 0.30);
+  // （ま）
+  // ト・ゥ・ル・ル・ル・ン（上昇アルペジオ＋キラめき）
+  const run = [659.25, 783.99, 880.00, 1046.50, 1318.51];
+  run.forEach((f, i) => {
+    const tt = t + 0.34 + i * 0.085;
+    tone(f, tt, 0.20, 'triangle', 0.26);
+    tone(f * 2, tt, 0.16, 'sine', 0.08); // シマー
+  });
+  // 最後のキラっ
+  tone(1567.98, t + 0.78, 0.5, 'sine', 0.18);
+  tone(2093.00, t + 0.82, 0.45, 'sine', 0.10);
+}
+function sfxJump(){ initAudio(); if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator(),g=AC.createGain(); o.type='square';
+  o.frequency.setValueAtTime(440,t); o.frequency.exponentialRampToValueAtTime(880,t+0.12);
+  o.connect(g); g.connect(master); g.gain.setValueAtTime(0.18,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.16);
+  o.start(t); o.stop(t+0.2);
+}
+function sfxHit(){ initAudio(); if(!AC) return; const t=AC.currentTime;
+  tone(523,t,0.1,'square',0.22); tone(784,t+0.06,0.12,'square',0.22); }
+function sfxThrow(){ initAudio(); if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator(),g=AC.createGain(); o.type='sawtooth';
+  o.frequency.setValueAtTime(700,t); o.frequency.exponentialRampToValueAtTime(300,t+0.15);
+  o.connect(g); g.connect(master); g.gain.setValueAtTime(0.12,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.18);
+  o.start(t); o.stop(t+0.2); }
+function sfxOuch(){ initAudio(); if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator(),g=AC.createGain(); o.type='sawtooth';
+  o.frequency.setValueAtTime(330,t); o.frequency.exponentialRampToValueAtTime(110,t+0.3);
+  o.connect(g); g.connect(master); g.gain.setValueAtTime(0.2,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.35);
+  o.start(t); o.stop(t+0.4); }
+function sfxClear(){ initAudio(); if(!AC) return; const t=AC.currentTime;
+  [523,659,784,1046].forEach((f,i)=>tone(f,t+i*0.09,0.25,'triangle',0.25)); }
+function fanfare(){ initAudio(); if(!AC) return; const t=AC.currentTime;
+  const seq=[523,659,784,1046,784,1046,1318]; seq.forEach((f,i)=>tone(f,t+i*0.16,0.3,'triangle',0.28));
+  tone(1568,t+seq.length*0.16,0.8,'sine',0.2); }
+
+/* =========================================================
+   ゲームデータ
+   ========================================================= */
+const STICKERS = [
+  { key:'simple',  emoji:'⭐', name:'シンプルシール',     rate:'★',    tier:'simple',
+    desc:'まずは き・ほ・ん！ ぺたっと はれる ふつうのシール。' },
+  { key:'water',   emoji:'💧', name:'ウォーターシール',   rate:'★★',   tier:'water',
+    desc:'なかに 水が入って ゆらゆら。さわると きもちいい人気シール。' },
+  { key:'shaka',   emoji:'🌈', name:'シャカシャカシール', rate:'★★★',  tier:'shaka',
+    desc:'ふると ラメが シャカシャカ動く！ キラキラの 高レア。' },
+  { key:'bondoro', emoji:'🍬', name:'ボンドロ（ボンボンドロップ）', rate:'★★★★', tier:'bondoro',
+    desc:'ぷっくり立体の でんせつシール！ シル活の おうさま級レア✨' },
+];
+
+const TASKS = [
+  { id:0, type:'athletic', ico:'🏃', title:'はじめての アスレチック',
+    desc:'あなを ジャンプで こえて ゴールへ！', reward:0,
+    cfg:{ segs:[[0,440],[530,930],[1020,1760]], obs:[180,1320], end:1700, speed:1 } },
+  { id:1, type:'battle', ico:'🦁', title:'ライオンを おいはらえ',
+    desc:'ニンジンを なげて ライオンを 3びき たおそう！', reward:1,
+    cfg:{ need: 3, kinds:['lion'], spawnEvery: 110, maxHp:1 } },
+  { id:2, type:'athletic', ico:'⛰️', title:'でこぼこ アスレチック',
+    desc:'あなも 岩も おおい！ きを つけて ゴールへ！', reward:2,
+    cfg:{ segs:[[0,420],[520,860],[960,1300],[1400,1740],[1840,2420]], obs:[170,2150], end:2360, speed:1.1 } },
+  { id:3, type:'battle', ico:'🐘', title:'ボス！ ぞうと ライオン',
+    desc:'ぞうは タフ！ 5たい たおして 支配人に なろう！', reward:3,
+    cfg:{ need: 5, kinds:['lion','elephant'], spawnEvery: 95, maxHp:1 } },
+];
+
+/* =========================================================
+   セーブ
+   ========================================================= */
+const SAVE_KEY = 'sealGameSave_v1';
+let game = { name:'', collected:[false,false,false,false] };
+function load(){
+  try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.collected) game = s; } catch(e){}
+}
+function save(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(game)); } catch(e){} }
+
+/* =========================================================
+   画面きりかえ
+   ========================================================= */
+const screens = { title:'screen-title', hub:'screen-hub', game:'screen-game' };
+function show(name){
+  Object.values(screens).forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById(screens[name]).classList.add('active');
+}
+
+/* =========================================================
+   タイトル
+   ========================================================= */
+const nameInput = document.getElementById('nameInput');
+load();
+if (game.name) nameInput.value = game.name;
+
+document.getElementById('startBtn').addEventListener('click', () => {
+  initAudio();
+  const n = (nameInput.value || '').trim() || 'ぴょん太';
+  game.name = n;
+  save();
+  buildHub();
+  show('hub');
+});
+
+/* =========================================================
+   ハブ / シール帳
+   ========================================================= */
+function buildHub(){
+  document.getElementById('hubTitle').textContent = `🐰 ${game.name}の シールちょう`;
+  document.getElementById('speechName').textContent = game.name;
+
+  // book
+  const book = document.getElementById('book');
+  book.innerHTML = '';
+  STICKERS.forEach((s, i) => {
+    const slot = document.createElement('div');
+    slot.className = 'slot';
+    if (game.collected[i]) {
+      slot.classList.add('filled');
+      if (s.tier === 'bondoro') slot.classList.add('bondoro');
+      slot.innerHTML = `<span class="sticker tier-${s.tier}">${s.emoji}</span><span class="rate">${s.rate}</span>`;
+    } else {
+      slot.innerHTML = `<span class="silhouette">${s.emoji}</span>`;
+    }
+    book.appendChild(slot);
+  });
+
+  // tasks
+  const list = document.getElementById('taskList');
+  list.innerHTML = '';
+  TASKS.forEach((task) => {
+    const done = game.collected[task.reward];
+    // 順番に解放: ひとつ前のミッションをクリアしていないとロック
+    const locked = task.id > 0 && !game.collected[TASKS[task.id - 1].reward];
+    const el = document.createElement('div');
+    el.className = 'task' + (done ? ' done' : '') + (locked ? ' locked' : '');
+    const st = STICKERS[task.reward];
+    let right;
+    if (done) right = `<span class="badge">クリア✓</span>`;
+    else if (locked) right = `<span class="badge">🔒 ロック</span>`;
+    else right = `<button class="btn go" data-task="${task.id}">ちょうせん</button>`;
+    el.innerHTML = `
+      <div class="ico">${task.ico}</div>
+      <div class="meta">
+        <div class="t">${task.title}</div>
+        <div class="d">${task.desc}</div>
+        <div class="d">ごほうび: ${st.emoji} ${st.name} <b>${st.rate}</b></div>
+      </div>
+      <div>${right}</div>`;
+    list.appendChild(el);
+  });
+
+  list.querySelectorAll('button[data-task]').forEach(b => {
+    b.addEventListener('click', () => startTask(parseInt(b.dataset.task, 10)));
+  });
+
+  document.getElementById('progressNum').textContent = game.collected.filter(Boolean).length;
+
+  if (game.collected.every(Boolean)) showEnding();
+}
+
+/* =========================================================
+   ミニゲーム共通
+   ========================================================= */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const GROUND_Y = H - 46;
+
+let current = null;     // 'athletic' | 'battle'
+let curTask = null;
+let raf = null;
+const keys = { left:false, right:false, jump:false, jumpEdge:false, throw:false, throwEdge:false };
+
+function startTask(id){
+  initAudio();
+  curTask = TASKS[id];
+  document.getElementById('hudTask').textContent = curTask.ico + ' ' + curTask.title;
+  // throwボタン表示制御
+  document.getElementById('throwBtn').classList.toggle('hidden', curTask.type !== 'battle');
+  document.getElementById('goal').textContent =
+    curTask.type === 'athletic' ? '🚩 ゴールを めざせ！' : `🥕 ${curTask.cfg.need}たい たおせ！`;
+  show('game');
+  if (curTask.type === 'athletic') initAthletic(curTask.cfg);
+  else initBattle(curTask.cfg);
+  lastT = performance.now();
+  loop();
+}
+
+function stopGame(){ if (raf) cancelAnimationFrame(raf); raf = null; }
+
+document.getElementById('giveUpBtn').addEventListener('click', () => {
+  stopGame(); buildHub(); show('hub');
+});
+
+let lastT = 0;
+function loop(){
+  const now = performance.now();
+  let dt = (now - lastT) / 16.667; // ~1 at 60fps
+  if (dt > 3) dt = 3;
+  lastT = now;
+  if (current === 'athletic') updateAthletic(dt);
+  else if (current === 'battle') updateBattle(dt);
+  // edge consume
+  keys.jumpEdge = false; keys.throwEdge = false;
+  raf = requestAnimationFrame(loop);
+}
+
+function clearTaskWin(){
+  stopGame();
+  sfxClear();
+  setTimeout(() => showReward(curTask.reward), 350);
+}
+
+// テスト用フック (?test=1 のときだけ有効。通常プレイには影響なし)
+if (typeof location !== 'undefined' && location.search.indexOf('test') !== -1){
+  window.__win = () => { if (curTask) clearTaskWin(); };
+}
+
+/* =========================================================
+   アスレチック (横スクロール)
+   ========================================================= */
+let ath;
+function initAthletic(cfg){
+  current = 'athletic';
+  // 手作りの公平なレイアウト（助走つき・適切な間隔）。最後の足場はゴールの先まで伸ばす
+  const segs = cfg.segs.map(s => s.slice());
+  segs[segs.length - 1] = [segs[segs.length - 1][0], cfg.end + 240];
+  const obs = cfg.obs.map(x => ({ x }));
+  ath = {
+    cfg, segs, obs, end: cfg.end,
+    p: { x: 60, y: GROUND_Y - 34, vx: 0, vy: 0, onGround: true },
+    cam: 0, dead: false, deadT: 0, won: false, safeX: 60,
+  };
+}
+
+function respawnAth(){
+  const a = ath, p = a.p;
+  p.x = a.safeX; p.y = GROUND_Y - 34; p.vx = 0; p.vy = 0; p.onGround = true;
+  a.dead = false; a.deadT = 0;
+}
+
+function onGroundAt(px){
+  // px = プレイヤー中心X。足元に地面があるか
+  for (const s of ath.segs){ if (px >= s[0] && px <= s[1]) return true; }
+  return false;
+}
+function segAt(px){
+  for (const s of ath.segs){ if (px >= s[0] && px <= s[1]) return s; }
+  return null;
+}
+
+function updateAthletic(dt){
+  const a = ath, p = a.p, cfg = a.cfg;
+  if (a.dead) {
+    a.deadT += dt;
+    drawAthletic();
+    if (a.deadT > 30){ respawnAth(); }  // チェックポイントから再開
+    return;
+  }
+  // 横移動
+  const accel = 0.6 * cfg.speed;
+  if (keys.left) p.vx -= accel;
+  if (keys.right) p.vx += accel;
+  if (!keys.left && !keys.right) p.vx *= 0.8;
+  p.vx = Math.max(-5*cfg.speed, Math.min(5*cfg.speed, p.vx));
+  // ジャンプ（エッジで発火＝素早いタップでも確実に反応）
+  if (keys.jumpEdge && p.onGround){ p.vy = -11; p.onGround = false; sfxJump(); }
+  // 重力
+  p.vy += 0.6 * dt;
+  p.x += p.vx * dt;
+  p.y += p.vy * dt;
+  if (p.x < 20) { p.x = 20; p.vx = 0; }
+
+  // 着地判定
+  const footY = GROUND_Y - 34;
+  if (p.y >= footY && p.vy >= 0 && onGroundAt(p.x)) {
+    p.y = footY; p.vy = 0; p.onGround = true;
+    // 到達した足場の「先頭＋助走」をチェックポイントに（毎回ちゃんと助走できる）
+    const s = segAt(p.x);
+    if (s){ const sx = Math.min(s[0] + 36, s[1] - 12); if (sx > a.safeX) a.safeX = sx; }
+  } else { p.onGround = false; }
+
+  // 穴に落ちた
+  if (p.y > H + 40) { a.dead = true; a.deadT = 0; sfxOuch(); }
+
+  // 障害物に ぶつかった (横から)
+  for (const o of a.obs){
+    if (Math.abs(o.x - p.x) < 20 && p.y > footY - 12){ // 地面近くで岩に接触（少し跳べば越えられる）
+      a.dead = true; a.deadT = 0; sfxOuch(); break;
+    }
+  }
+
+  // ゴール
+  if (p.x >= a.end - 10 && !a.won){ a.won = true; clearTaskWin(); }
+
+  // カメラ
+  a.cam = Math.max(0, Math.min(p.x - 120, a.end - W + 120));
+  drawAthletic();
+}
+
+function drawAthletic(){
+  const a = ath, p = a.p, cam = a.cam;
+  ctx.clearRect(0,0,W,H);
+  // 空
+  const sky = ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#bfeaff'); sky.addColorStop(1,'#e8f9ff');
+  ctx.fillStyle = sky; ctx.fillRect(0,0,W,H);
+  // 雲
+  ctx.font = '26px serif';
+  for (let i=0;i<6;i++){ const cx = ((i*420 - cam*0.4) % (W+120)+W+120)%(W+120)-60; ctx.fillText('☁️', cx, 50 + (i%2)*34); }
+  // 地面
+  ctx.fillStyle = '#8fd98f';
+  for (const s of a.segs){
+    const x1 = s[0]-cam, x2 = s[1]-cam;
+    if (x2 < -10 || x1 > W+10) continue;
+    ctx.fillRect(x1, GROUND_Y, x2-x1, H-GROUND_Y);
+    ctx.fillStyle = '#5cb85c'; ctx.fillRect(x1, GROUND_Y, x2-x1, 6); ctx.fillStyle = '#8fd98f';
+  }
+  // 障害物 (岩)
+  ctx.font = '28px serif';
+  for (const o of a.obs){ const ox = o.x-cam; if (ox>-30&&ox<W+30) ctx.fillText('🪨', ox-14, GROUND_Y-4); }
+  // ゴール旗
+  const gx = a.end - cam; if (gx < W+40) { ctx.font='34px serif'; ctx.fillText('🚩', gx-16, GROUND_Y-6); }
+  // プレイヤー
+  ctx.font = '30px serif';
+  const pe = a.dead ? '💫' : '🐰';
+  ctx.save();
+  ctx.translate(p.x-cam, p.y);
+  ctx.fillText(pe, -16, 8);
+  ctx.restore();
+}
+
+/* =========================================================
+   敵バトル
+   ========================================================= */
+let bat;
+function initBattle(cfg){
+  current = 'battle';
+  bat = {
+    cfg,
+    p: { x: 70, y: GROUND_Y - 34, vy: 0, onGround: true },
+    enemies: [], carrots: [], parts: [],
+    hp: 3, defeated: 0, timer: 0, won: false, hurtCd: 0,
+  };
+  document.getElementById('hudInfo').textContent = '❤❤❤';
+}
+
+function spawnEnemy(){
+  const cfg = bat.cfg;
+  const kind = cfg.kinds[Math.floor(Math.random()*cfg.kinds.length)];
+  const isElephant = kind === 'elephant';
+  bat.enemies.push({
+    kind, x: W + 20, y: GROUND_Y - 30,
+    speed: (isElephant ? 0.7 : 1.2) + Math.random()*0.4,
+    hp: isElephant ? 2 : 1, emoji: isElephant ? '🐘' : '🦁', flash:0,
+  });
+}
+
+function updateBattle(dt){
+  const b = bat, p = b.p, cfg = b.cfg;
+  b.timer += dt;
+  if (b.hurtCd > 0) b.hurtCd -= dt;
+
+  // 移動 (左右)
+  const sp = 4;
+  if (keys.left) p.x -= sp*dt;
+  if (keys.right) p.x += sp*dt;
+  p.x = Math.max(24, Math.min(W-24, p.x));
+  // ジャンプ
+  if (keys.jumpEdge && p.onGround){ p.vy = -10; p.onGround=false; sfxJump(); }
+  p.vy += 0.6*dt; p.y += p.vy*dt;
+  if (p.y >= GROUND_Y-34){ p.y = GROUND_Y-34; p.vy=0; p.onGround=true; }
+  // なげる
+  if (keys.throwEdge){
+    b.carrots.push({ x: p.x+12, y: p.y, vx: 7 });
+    sfxThrow();
+  }
+
+  // スポーン
+  if (b.timer % cfg.spawnEvery < dt && b.defeated + b.enemies.length < cfg.need + 2){
+    if (b.defeated + b.enemies.length < cfg.need) spawnEnemy();
+  }
+  if (b.enemies.length === 0 && b.defeated < cfg.need && b.timer > 30) spawnEnemy();
+
+  // ニンジン
+  for (const c of b.carrots){ c.x += c.vx*dt; }
+  b.carrots = b.carrots.filter(c => c.x < W+20);
+
+  // 敵
+  for (const e of b.enemies){
+    e.x -= e.speed*dt;
+    if (e.flash>0) e.flash -= dt;
+    // ニンジン命中
+    for (const c of b.carrots){
+      if (!c.dead && Math.abs(c.x-e.x)<22 && Math.abs(c.y-e.y)<26){
+        c.dead = true; e.hp--; e.flash = 6; sfxHit();
+        if (e.hp <= 0){ e.dead = true; b.defeated++; addParts(e.x,e.y); }
+      }
+    }
+    // 踏みつけ (上から)
+    if (!e.dead && Math.abs(e.x-p.x)<26 && p.vy>0 && p.y < e.y-6){
+      e.hp--; e.flash=6; p.vy=-8; sfxHit();
+      if (e.hp<=0){ e.dead=true; b.defeated++; addParts(e.x,e.y); }
+    }
+    // プレイヤーに 接触 (横)
+    if (!e.dead && b.hurtCd<=0 && Math.abs(e.x-p.x)<26 && Math.abs(e.y-p.y)<28 && p.vy<=0){
+      b.hp--; b.hurtCd = 60; sfxOuch();
+      document.getElementById('hudInfo').textContent = '❤'.repeat(Math.max(0,b.hp)) + '🤍'.repeat(3-Math.max(0,b.hp));
+      e.x -= 30;
+      if (b.hp <= 0){ // 失敗 → やりなおし
+        setTimeout(()=>{ stopGame(); alert('やられちゃった…！ もういちど ちょうせんしよう💪'); buildHub(); show('hub'); }, 60);
+      }
+    }
+  }
+  b.carrots = b.carrots.filter(c => !c.dead);
+  b.enemies = b.enemies.filter(e => !e.dead && e.x > -30);
+
+  // パーティクル
+  for (const pt of b.parts){ pt.x+=pt.vx*dt; pt.y+=pt.vy*dt; pt.vy+=0.3*dt; pt.life-=dt; }
+  b.parts = b.parts.filter(pt => pt.life>0);
+
+  // クリア判定
+  if (b.defeated >= cfg.need && !b.won){ b.won = true; clearTaskWin(); }
+
+  drawBattle();
+}
+function addParts(x,y){ for(let i=0;i<8;i++) bat.parts.push({x,y,vx:(Math.random()-0.5)*6,vy:-Math.random()*5-1,life:20+Math.random()*10}); }
+
+function drawBattle(){
+  const b = bat, p = b.p;
+  ctx.clearRect(0,0,W,H);
+  const sky = ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#ffe7c2'); sky.addColorStop(1,'#fff4e0');
+  ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
+  // 地面
+  ctx.fillStyle='#e6c98f'; ctx.fillRect(0,GROUND_Y,W,H-GROUND_Y);
+  ctx.fillStyle='#d4af6a'; ctx.fillRect(0,GROUND_Y,W,6);
+  // 残り
+  ctx.fillStyle='#a85'; ctx.font='bold 14px sans-serif';
+  ctx.fillText(`たおした: ${b.defeated}/${b.cfg.need}`, 12, 22);
+  // ニンジン
+  ctx.font='20px serif';
+  for (const c of b.carrots) ctx.fillText('🥕', c.x-10, c.y+8);
+  // 敵
+  ctx.font='30px serif';
+  for (const e of b.enemies){
+    ctx.save();
+    if (e.flash>0){ ctx.globalAlpha = 0.4 + 0.6*Math.abs(Math.sin(e.flash)); }
+    ctx.fillText(e.emoji, e.x-16, e.y+10);
+    ctx.restore();
+  }
+  // パーティクル
+  ctx.font='14px serif';
+  for (const pt of b.parts) ctx.fillText('✨', pt.x-6, pt.y);
+  // プレイヤー
+  ctx.font='30px serif';
+  ctx.save();
+  if (b.hurtCd>0 && Math.floor(b.hurtCd/4)%2===0) ctx.globalAlpha=0.4;
+  ctx.fillText('🐰', p.x-16, p.y+8);
+  ctx.restore();
+}
+
+/* =========================================================
+   入力 (キーボード + タッチ)
+   ========================================================= */
+window.addEventListener('keydown', (e) => {
+  if (['ArrowLeft','ArrowRight','ArrowUp','Space',' '].includes(e.key) || e.code==='Space') e.preventDefault();
+  if (e.repeat) return;
+  if (e.key==='ArrowLeft') keys.left=true;
+  else if (e.key==='ArrowRight') keys.right=true;
+  else if (e.key==='ArrowUp'||e.code==='Space'||e.key===' '){ if(!keys.jump) keys.jumpEdge=true; keys.jump=true; }
+  else if (e.key.toLowerCase()==='x'||e.key==='ArrowDown'){ if(!keys.throw) keys.throwEdge=true; keys.throw=true; }
+});
+window.addEventListener('keyup', (e) => {
+  if (e.key==='ArrowLeft') keys.left=false;
+  else if (e.key==='ArrowRight') keys.right=false;
+  else if (e.key==='ArrowUp'||e.code==='Space'||e.key===' ') keys.jump=false;
+  else if (e.key.toLowerCase()==='x'||e.key==='ArrowDown') keys.throw=false;
+});
+// タッチ/クリックボタン
+document.querySelectorAll('.key').forEach(btn => {
+  const k = btn.dataset.k;
+  const press = (e) => { e.preventDefault(); initAudio();
+    if (k==='left') keys.left=true;
+    else if (k==='right') keys.right=true;
+    else if (k==='jump'){ if(!keys.jump) keys.jumpEdge=true; keys.jump=true; }
+    else if (k==='throw'){ if(!keys.throw) keys.throwEdge=true; keys.throw=true; }
+  };
+  const release = (e) => { e.preventDefault();
+    if (k==='left') keys.left=false;
+    else if (k==='right') keys.right=false;
+    else if (k==='jump') keys.jump=false;
+    else if (k==='throw') keys.throw=false;
+  };
+  btn.addEventListener('touchstart', press, {passive:false});
+  btn.addEventListener('touchend', release, {passive:false});
+  btn.addEventListener('touchcancel', release, {passive:false});
+  btn.addEventListener('mousedown', press);
+  btn.addEventListener('mouseup', release);
+  btn.addEventListener('mouseleave', release);
+});
+
+/* =========================================================
+   ごほうび演出 (シールを貼る)
+   ========================================================= */
+function showReward(idx){
+  const s = STICKERS[idx];
+  document.getElementById('rewardEmoji').innerHTML = `<span class="sticker tier-${s.tier}">${s.emoji}</span>`;
+  document.getElementById('rewardName').textContent = s.name;
+  document.getElementById('rewardRate').textContent = s.rate;
+  document.getElementById('rewardDesc').textContent = s.desc;
+  document.getElementById('reward').classList.add('show');
+}
+document.getElementById('pasteBtn').addEventListener('click', () => {
+  const idx = curTask.reward;
+  document.getElementById('reward').classList.remove('show');
+  playChime();              // 🔊 トゥルン、トゥルルルン！
+  burstSparkles();
+  game.collected[idx] = true;
+  save();
+  setTimeout(() => {
+    buildHub();
+    show('hub');
+  }, 700);
+});
+
+function burstSparkles(){
+  const app = document.getElementById('app');
+  const emojis = ['✨','💖','⭐','🌟','💫'];
+  for (let i=0;i<16;i++){
+    const s = document.createElement('div');
+    s.className = 'spark';
+    s.textContent = emojis[i%emojis.length];
+    s.style.left = (30 + Math.random()*( app.clientWidth-60)) + 'px';
+    s.style.top = (app.clientHeight*0.4 + Math.random()*60) + 'px';
+    s.style.animationDelay = (Math.random()*0.3)+'s';
+    app.appendChild(s);
+    setTimeout(()=>s.remove(), 1400);
+  }
+}
+
+/* =========================================================
+   エンディング
+   ========================================================= */
+function showEnding(){
+  fanfare();
+  document.getElementById('endText').innerHTML =
+    `🐹「みごとだ <b>${game.name}</b>！ きみが あたらしい <b>支配人</b>だ！」<br>` +
+    `🐰「やったー！ うれしい！ いっしょに シル活 つづけようね！」<br><br>` +
+    `🎊 ${game.name}は シールちょうの 支配人に なった！ 🎊`;
+  const end = document.getElementById('ending');
+  end.classList.add('show');
+  confettiBurst();
+}
+function confettiBurst(){
+  const app = document.getElementById('app');
+  const cs = ['🎊','🎉','✨','💖','⭐','🌈','🍬'];
+  for (let i=0;i<40;i++){
+    const c = document.createElement('div');
+    c.className='confetti'; c.textContent = cs[i%cs.length];
+    c.style.left = Math.random()*app.clientWidth+'px';
+    c.style.animationDuration = (2.5+Math.random()*2.5)+'s';
+    c.style.animationDelay = (Math.random()*1.5)+'s';
+    app.appendChild(c);
+    setTimeout(()=>c.remove(), 5500);
+  }
+}
+document.getElementById('endBtn').addEventListener('click', () => {
+  game.collected = [false,false,false,false];
+  save();
+  document.getElementById('ending').classList.remove('show');
+  show('title');
+});
+
+</script>
+</body>
+</html>
