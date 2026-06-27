@@ -162,14 +162,25 @@
     cursor: pointer; user-select: none; touch-action: manipulation;
   }
   .key:active { transform: translateY(4px); box-shadow: 0 1px 0 #4fc3a1; }
-  .key.act { background: var(--pink); box-shadow: 0 5px 0 var(--pink-d); width: auto; padding: 0 18px; font-size: 1.05rem; }
+  .key.act { background: var(--pink); box-shadow: 0 5px 0 var(--pink-d); width: auto; padding: 0 16px; font-size: 1rem; }
   .key.act:active { box-shadow: 0 1px 0 var(--pink-d); }
+  .key.sword { background: var(--yellow); box-shadow: 0 5px 0 #d9a800; color: #7a5a00; }
+  .key.sword:active { box-shadow: 0 1px 0 #d9a800; }
   .key.hidden { display: none; }
+  #pad .right-keys { display: flex; gap: 8px; }
 
   /* ---- reward overlay ---- */
-  #reward, #ending { position: absolute; inset: 0; display: none; background: rgba(255,246,239,.97);
+  #reward, #ending, #retry { position: absolute; inset: 0; display: none; background: rgba(255,246,239,.97);
     flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; z-index: 20; }
-  #reward.show, #ending.show { display: flex; }
+  #reward.show, #ending.show, #retry.show { display: flex; }
+  #retry { background: rgba(60,48,54,.82); }
+  #retry .retry-card {
+    background: #fff; border-radius: 22px; padding: 24px 22px; border: 4px solid var(--pink);
+    box-shadow: 0 12px 30px rgba(0,0,0,.3); animation: pop .35s ease; max-width: 320px;
+  }
+  #retry .retry-card .big { font-size: 3.4rem; margin: 4px 0 8px; }
+  #retry .retry-card h2 { margin-bottom: 14px; }
+  #retry .retry-card .btn { margin: 6px; }
   .reward-card {
     background: #fff; border-radius: 22px; padding: 22px; border: 4px solid var(--pink);
     box-shadow: 0 12px 30px rgba(255,93,143,.3); animation: pop .4s ease; max-width: 320px;
@@ -256,6 +267,7 @@
         <div class="right-keys">
           <button class="key act" data-k="jump">ジャンプ</button>
           <button class="key act" id="throwBtn" data-k="throw">なげる🥕</button>
+          <button class="key sword hidden" id="swordBtn" data-k="sword">けん⚔️</button>
         </div>
       </div>
       <div class="center" style="margin-top:12px;">
@@ -273,6 +285,17 @@
       <div class="rate-line" id="rewardRate">★</div>
       <p id="rewardDesc" style="font-size:.85rem; opacity:.8; margin:8px 0 16px;"></p>
       <button class="btn mint" id="pasteBtn">シールちょうに はる！</button>
+    </div>
+  </div>
+
+  <!-- ===== RETRY (game over) ===== -->
+  <div id="retry">
+    <div class="retry-card">
+      <div class="big">😵</div>
+      <h2>やられちゃった…！</h2>
+      <p style="opacity:.8; margin-bottom:14px;">ライフが なくなったよ。<br>もういちど ちょうせんしよう💪</p>
+      <button class="btn" id="retryBtn">もういちど ちょうせん</button>
+      <button class="btn mint" id="retryBackBtn">シールちょうに もどる</button>
     </div>
   </div>
 
@@ -354,6 +377,53 @@ function sfxClear(){ initAudio(); if(!AC) return; const t=AC.currentTime;
 function fanfare(){ initAudio(); if(!AC) return; const t=AC.currentTime;
   const seq=[523,659,784,1046,784,1046,1318]; seq.forEach((f,i)=>tone(f,t+i*0.16,0.3,'triangle',0.28));
   tone(1568,t+seq.length*0.16,0.8,'sine',0.2); }
+// 落下音「ぴよん！ ぐー、、」
+function sfxFall(){ initAudio(); if(!AC) return; const t=AC.currentTime;
+  // ぴよん（上がって下がる）
+  const o=AC.createOscillator(),g=AC.createGain(); o.type='square';
+  o.frequency.setValueAtTime(600,t);
+  o.frequency.exponentialRampToValueAtTime(1000,t+0.08);
+  o.frequency.exponentialRampToValueAtTime(400,t+0.2);
+  o.connect(g); g.connect(master); g.gain.setValueAtTime(0.2,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.24);
+  o.start(t); o.stop(t+0.28);
+  // ぐー、、（低く下降）
+  const o2=AC.createOscillator(),g2=AC.createGain(); o2.type='sawtooth';
+  o2.frequency.setValueAtTime(320,t+0.22);
+  o2.frequency.exponentialRampToValueAtTime(90,t+0.7);
+  o2.connect(g2); g2.connect(master); g2.gain.setValueAtTime(0.001,t+0.22);
+  g2.gain.linearRampToValueAtTime(0.18,t+0.3); g2.gain.exponentialRampToValueAtTime(0.001,t+0.78);
+  o2.start(t+0.22); o2.stop(t+0.85);
+}
+// ライフ全消失「とぅーるーるーるー、、、」（かなしい下降）
+function sfxGameOver(){ initAudio(); if(!AC) return; const t=AC.currentTime;
+  const seq=[659.25,523.25,440.00,349.23,261.63];
+  seq.forEach((f,i)=>tone(f, t+i*0.22, 0.4, 'triangle', 0.26));
+  tone(196.00, t+seq.length*0.22, 1.1, 'sine', 0.18); // 余韻
+}
+function sfxZap(){ initAudio(); if(!AC) return; const t=AC.currentTime;
+  const o=AC.createOscillator(),g=AC.createGain(); o.type='sawtooth';
+  o.frequency.setValueAtTime(900,t); o.frequency.exponentialRampToValueAtTime(180,t+0.22);
+  o.connect(g); g.connect(master); g.gain.setValueAtTime(0.16,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.26);
+  o.start(t); o.stop(t+0.3); }
+function sfxPickup(){ initAudio(); if(!AC) return; const t=AC.currentTime;
+  [784,1046,1318].forEach((f,i)=>tone(f,t+i*0.07,0.18,'triangle',0.25)); }
+// マリオのスター風ループ（剣がつかえる15秒間）
+let starTimer = null;
+function swordStarStart(){
+  initAudio(); if(!AC) return;
+  swordStarStop();
+  const melody=[1046.50,1046.50,1046.50,830.61,1046.50,1318.51];
+  let i=0;
+  starTimer = setInterval(()=>{
+    if(!AC) return;
+    const t=AC.currentTime;
+    const f=melody[i%melody.length];
+    tone(f, t, 0.11, 'square', 0.14);
+    tone(f/2, t, 0.11, 'triangle', 0.06);
+    i++;
+  }, 120);
+}
+function swordStarStop(){ if(starTimer){ clearInterval(starTimer); starTimer=null; } }
 
 /* =========================================================
    ゲームデータ
@@ -372,13 +442,13 @@ const STICKERS = [
 const TASKS = [
   { id:0, type:'athletic', ico:'🏃', title:'はじめての アスレチック',
     desc:'あなを ジャンプで こえて ゴールへ！', reward:0,
-    cfg:{ segs:[[0,440],[530,930],[1020,1760]], obs:[180,1320], end:1700, speed:1 } },
+    cfg:{ segs:[[0,460],[610,1010],[1160,1900]], obs:[200,1340], end:1840, speed:1 } },
   { id:1, type:'battle', ico:'🦁', title:'ライオンを おいはらえ',
     desc:'ニンジンを なげて ライオンを 3びき たおそう！', reward:1,
     cfg:{ need: 3, kinds:['lion'], spawnEvery: 110, maxHp:1 } },
   { id:2, type:'athletic', ico:'⛰️', title:'でこぼこ アスレチック',
     desc:'あなも 岩も おおい！ きを つけて ゴールへ！', reward:2,
-    cfg:{ segs:[[0,420],[520,860],[960,1300],[1400,1740],[1840,2420]], obs:[170,2150], end:2360, speed:1.1 } },
+    cfg:{ segs:[[0,440],[590,940],[1090,1440],[1590,1940],[2090,2700]], obs:[160,2400], end:2640, speed:1.1 } },
   { id:3, type:'battle', ico:'🐘', title:'ボス！ ぞうと ライオン',
     desc:'ぞうは タフ！ 5たい たおして 支配人に なろう！', reward:3,
     cfg:{ need: 5, kinds:['lion','elephant'], spawnEvery: 95, maxHp:1 } },
@@ -473,309 +543,401 @@ function buildHub(){
 
   document.getElementById('progressNum').textContent = game.collected.filter(Boolean).length;
 
-  if (game.collected.every(Boolean)) showEnding();
+  // 全シール収集 → 「さいごの試練：お城へ」を案内
+  if (game.collected.every(Boolean)){
+    const banner = document.createElement('div');
+    banner.className = 'task';
+    banner.style.borderColor = 'var(--yellow)';
+    banner.innerHTML = `
+      <div class="ico">🏰</div>
+      <div class="meta">
+        <div class="t">さいごの試練：お城へ！</div>
+        <div class="d">敵とアスレチックを とっぱして お城へ。ハムスターが 👑 をくれる！</div>
+      </div>
+      <div><button class="btn go" id="goCastle">しゅっぱつ</button></div>`;
+    list.insertBefore(banner, list.firstChild);
+    document.getElementById('goCastle').addEventListener('click', startCastle);
+  }
 }
 
 /* =========================================================
-   ミニゲーム共通
+   ステージエンジン共通（アスレチック・バトル・お城を統合）
    ========================================================= */
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 const W = cv.width, H = cv.height;
 const GROUND_Y = H - 46;
+const FOOT = GROUND_Y - 34;        // 足が地面のときのプレイヤー y
 
-let current = null;     // 'athletic' | 'battle'
+let stage = null;
 let curTask = null;
-let raf = null;
-const keys = { left:false, right:false, jump:false, jumpEdge:false, throw:false, throwEdge:false };
+let lastT = 0, running = false;
+const keys = { left:false, right:false, jump:false, jumpEdge:false,
+               throw:false, throwEdge:false, sword:false, swordEdge:false };
+
+const throwBtn = document.getElementById('throwBtn');
+const swordBtn = document.getElementById('swordBtn');
+const hudInfo  = document.getElementById('hudInfo');
+const goalEl   = document.getElementById('goal');
 
 function startTask(id){
   initAudio();
   curTask = TASKS[id];
   document.getElementById('hudTask').textContent = curTask.ico + ' ' + curTask.title;
-  // throwボタン表示制御
-  document.getElementById('throwBtn').classList.toggle('hidden', curTask.type !== 'battle');
-  document.getElementById('goal').textContent =
-    curTask.type === 'athletic' ? '🚩 ゴールを めざせ！' : `🥕 ${curTask.cfg.need}たい たおせ！`;
   show('game');
-  if (curTask.type === 'athletic') initAthletic(curTask.cfg);
-  else initBattle(curTask.cfg);
-  lastT = performance.now();
-  loop();
+  const c = curTask.cfg;
+  if (curTask.type === 'athletic')
+    startStage({ mode:'reach', scroll:true, segs:c.segs, obs:c.obs, end:c.end, speed:c.speed });
+  else
+    startStage({ mode:'defeat', scroll:false, need:c.need, kinds:c.kinds, spawnEvery:c.spawnEvery });
 }
 
-function stopGame(){ if (raf) cancelAnimationFrame(raf); raf = null; }
+// 全シール収集後の「さいごの試練：お城へ」（敵＋アスレチックの複合面）
+function startCastle(){
+  initAudio();
+  curTask = { reward:-1, type:'castle', title:'さいごの試練：お城へ' };
+  document.getElementById('hudTask').textContent = '🏰 さいごの試練：お城へ';
+  show('game');
+  startStage({
+    mode:'reach', scroll:true, isCastle:true,
+    segs:[[0,460],[610,960],[1110,1460],[1610,1960],[2110,2760]],
+    obs:[200],
+    placedEnemies:[ {kind:'lion',x:780}, {kind:'elephant',x:1280},
+                    {kind:'lion',x:1780}, {kind:'elephant',x:2350} ],
+    end:2700, speed:1.05,
+  });
+}
 
-document.getElementById('giveUpBtn').addEventListener('click', () => {
-  stopGame(); buildHub(); show('hub');
-});
+function startLoop(){ if (running) return; running = true; lastT = performance.now(); requestAnimationFrame(loop); }
+function stopGame(){ running = false; swordStarStop(); }
 
-let lastT = 0;
 function loop(){
+  if (!running) return;
   const now = performance.now();
   let dt = (now - lastT) / 16.667; // ~1 at 60fps
   if (dt > 3) dt = 3;
   lastT = now;
-  if (current === 'athletic') updateAthletic(dt);
-  else if (current === 'battle') updateBattle(dt);
-  // edge consume
-  keys.jumpEdge = false; keys.throwEdge = false;
-  raf = requestAnimationFrame(loop);
+  if (stage) updateStage(dt);
+  keys.jumpEdge = false; keys.throwEdge = false; keys.swordEdge = false;
+  requestAnimationFrame(loop);
 }
 
-function clearTaskWin(){
-  stopGame();
-  sfxClear();
-  setTimeout(() => showReward(curTask.reward), 350);
-}
+document.getElementById('giveUpBtn').addEventListener('click', () => {
+  stopGame(); buildHub(); show('hub');
+});
+document.getElementById('retryBtn').addEventListener('click', () => {
+  document.getElementById('retry').classList.remove('show');
+  if (curTask && curTask.type === 'castle') startCastle();
+  else startTask(curTask.id);
+});
+document.getElementById('retryBackBtn').addEventListener('click', () => {
+  document.getElementById('retry').classList.remove('show');
+  stopGame(); buildHub(); show('hub');
+});
 
 // テスト用フック (?test=1 のときだけ有効。通常プレイには影響なし)
 if (typeof location !== 'undefined' && location.search.indexOf('test') !== -1){
-  window.__win = () => { if (curTask) clearTaskWin(); };
+  window.__win   = () => { if (stage) winStage(); };
+  window.__sword = () => { if (stage){ stage.swordItem=null; stage.sword.active=true; stage.sword.time=900; swordBtn.classList.remove('hidden'); swordStarStart(); } };
+  window.__state = () => stage ? {
+    mode:stage.mode, x:Math.round(stage.p.x), y:Math.round(stage.p.y), onG:stage.p.onGround,
+    lives:stage.lives, dead:stage.dead, over:stage.over, won:stage.won,
+    defeated:stage.defeated, need:stage.need, enemies:stage.enemies.length,
+    sword:stage.sword.active, swordItemX: stage.swordItem?Math.round(stage.swordItem.x):null,
+    end:stage.end, segs:stage.segs, obs:stage.obs.map(o=>o.x), castle:stage.isCastle,
+  } : null;
 }
 
 /* =========================================================
-   アスレチック (横スクロール)
+   ステージ生成・物理・描画（統合エンジン）
    ========================================================= */
-let ath;
-function initAthletic(cfg){
-  current = 'athletic';
-  // 手作りの公平なレイアウト（助走つき・適切な間隔）。最後の足場はゴールの先まで伸ばす
-  const segs = cfg.segs.map(s => s.slice());
-  segs[segs.length - 1] = [segs[segs.length - 1][0], cfg.end + 240];
-  const obs = cfg.obs.map(x => ({ x }));
-  ath = {
-    cfg, segs, obs, end: cfg.end,
-    p: { x: 60, y: GROUND_Y - 34, vx: 0, vy: 0, onGround: true },
-    cam: 0, dead: false, deadT: 0, won: false, safeX: 60,
+function makeEnemy(kind, x, fromRight){
+  const isE = kind === 'elephant';
+  return {
+    kind, x, y: FOOT, vy:0, onGround:true, fromRight: !!fromRight,
+    hp: isE?10:5, maxHp: isE?10:5, emoji: isE?'🐘':'🦁',
+    flash:0, jumpCd: 50+Math.random()*70, shootCd: 60+Math.random()*80,
+    speed: (isE?0.5:0.85)+Math.random()*0.3, dead:false,
   };
 }
 
-function respawnAth(){
-  const a = ath, p = a.p;
-  p.x = a.safeX; p.y = GROUND_Y - 34; p.vx = 0; p.vy = 0; p.onGround = true;
-  a.dead = false; a.deadT = 0;
+function startStage(spec){
+  const segs = (spec.segs || [[0, W]]).map(s => s.slice());
+  if (spec.mode === 'reach') segs[segs.length-1] = [segs[segs.length-1][0], spec.end + 260];
+  stage = {
+    spec, mode: spec.mode, scroll: !!spec.scroll, isCastle: !!spec.isCastle,
+    segs, obs: (spec.obs||[]).map(x => ({ x })), end: spec.end || W, speed: spec.speed || 1,
+    p: { x:60, y:FOOT, vx:0, vy:0, onGround:true, dir:1, invuln:0 },
+    cam:0, safeX:60,
+    lives:3, maxLives:3, dead:false, deadPause:0, over:false, won:false,
+    enemies:[], carrots:[], shocks:[], eproj:[], parts:[],
+    sword:{ active:false, time:0 }, swordCd:0, swordItem:null, swordSpawnCd:200,
+    defeated:0, need: spec.need||0, timer:0,
+  };
+  if (spec.placedEnemies) spec.placedEnemies.forEach(e => stage.enemies.push(makeEnemy(e.kind, e.x, false)));
+  const combat = (spec.mode === 'defeat' || spec.isCastle);
+  throwBtn.classList.toggle('hidden', !combat);
+  swordBtn.classList.add('hidden');
+  goalEl.textContent = spec.mode === 'defeat' ? `🥕 ${stage.need}たい たおせ！`
+                     : (spec.isCastle ? '🏰 敵をかわして お城へ！' : '🚩 ゴールを めざせ！');
+  renderHearts();
+  document.getElementById('retry').classList.remove('show');
+  startLoop();
 }
 
-function onGroundAt(px){
-  // px = プレイヤー中心X。足元に地面があるか
-  for (const s of ath.segs){ if (px >= s[0] && px <= s[1]) return true; }
-  return false;
-}
-function segAt(px){
-  for (const s of ath.segs){ if (px >= s[0] && px <= s[1]) return s; }
-  return null;
+function renderHearts(){
+  const n = stage ? Math.max(0, stage.lives) : 3;
+  const max = stage ? stage.maxLives : 3;
+  hudInfo.textContent = '❤'.repeat(n) + '🤍'.repeat(Math.max(0, max-n));
 }
 
-function updateAthletic(dt){
-  const a = ath, p = a.p, cfg = a.cfg;
-  if (a.dead) {
-    a.deadT += dt;
-    drawAthletic();
-    if (a.deadT > 30){ respawnAth(); }  // チェックポイントから再開
-    return;
-  }
-  // 横移動
-  const accel = 0.6 * cfg.speed;
-  if (keys.left) p.vx -= accel;
-  if (keys.right) p.vx += accel;
+function groundAt(px){ for (const s of stage.segs){ if (px>=s[0] && px<=s[1]) return true; } return false; }
+function segOf(px){ for (const s of stage.segs){ if (px>=s[0] && px<=s[1]) return s; } return null; }
+
+function respawn(){
+  const s = stage, p = s.p;
+  p.x = s.safeX; p.y = FOOT; p.vx = 0; p.vy = 0; p.onGround = true; p.invuln = 50;
+  s.dead = false; s.deadPause = 0;
+}
+
+function loseLife(src){
+  const s = stage, p = s.p;
+  if (p.invuln > 0 && src !== 'fall') return;       // 無敵中は接触/弾/岩を無効
+  s.lives--;
+  renderHearts();
+  if (src === 'fall') sfxFall(); else sfxOuch();
+  if (s.lives <= 0){ gameOver(); return; }
+  if (src === 'fall'){ s.dead = true; s.deadPause = 0; }   // チェックポイント復帰
+  else { p.invuln = 72; p.vy = -5; p.vx = (src==='rock') ? -p.dir*4 : (p.x < W/2 ? 3.5 : -3.5); }
+}
+
+function gameOver(){
+  if (!stage) return;
+  stage.over = true;
+  stopGame();
+  swordBtn.classList.add('hidden');
+  sfxGameOver();
+  document.getElementById('retry').classList.add('show');
+}
+
+function winStage(){
+  stopGame();
+  stage.sword.active = false;
+  if (stage.isCastle){ setTimeout(() => showEnding(), 600); }
+  else { sfxClear(); setTimeout(() => showReward(curTask.reward), 350); }
+}
+
+function killEnemy(e){ e.dead = true; stage.defeated++; addParts(e.x, e.y); }
+function addParts(x, y){ for (let i=0;i<8;i++) stage.parts.push({ x, y, vx:(Math.random()-0.5)*6, vy:-Math.random()*5-1, life:20+Math.random()*10 }); }
+
+function spawnSwordItem(){
+  const s = stage;
+  const x = s.scroll ? Math.min(s.p.x + 240, s.end - 80) : 120 + Math.random()*(W-240);
+  s.swordItem = { x, y: FOOT - 28, bob:0 };
+}
+function spawnBattleEnemy(){
+  const kinds = stage.spec.kinds || ['lion'];
+  stage.enemies.push(makeEnemy(kinds[Math.floor(Math.random()*kinds.length)], W+20, true));
+}
+
+function updateStage(dt){
+  const s = stage, p = s.p;
+  if (s.over){ drawStage(); return; }
+  if (s.dead){ s.deadPause += dt; drawStage(); if (s.deadPause > 26) respawn(); return; }
+
+  s.timer += dt;
+  if (p.invuln > 0) p.invuln -= dt;
+  if (s.swordCd > 0) s.swordCd -= dt;
+
+  // 移動
+  const accel = 0.6*s.speed, maxv = 5*s.speed;
+  if (keys.left){ p.vx -= accel; p.dir = -1; }
+  if (keys.right){ p.vx += accel; p.dir = 1; }
   if (!keys.left && !keys.right) p.vx *= 0.8;
-  p.vx = Math.max(-5*cfg.speed, Math.min(5*cfg.speed, p.vx));
-  // ジャンプ（エッジで発火＝素早いタップでも確実に反応）
+  p.vx = Math.max(-maxv, Math.min(maxv, p.vx));
   if (keys.jumpEdge && p.onGround){ p.vy = -11; p.onGround = false; sfxJump(); }
-  // 重力
-  p.vy += 0.6 * dt;
-  p.x += p.vx * dt;
-  p.y += p.vy * dt;
-  if (p.x < 20) { p.x = 20; p.vx = 0; }
+  p.vy += 0.6*dt; p.x += p.vx*dt; p.y += p.vy*dt;
+  if (p.x < 20){ p.x = 20; p.vx = 0; }
+  if (!s.scroll && p.x > W-20){ p.x = W-20; p.vx = 0; }
 
-  // 着地判定
-  const footY = GROUND_Y - 34;
-  if (p.y >= footY && p.vy >= 0 && onGroundAt(p.x)) {
-    p.y = footY; p.vy = 0; p.onGround = true;
-    // 到達した足場の「先頭＋助走」をチェックポイントに（毎回ちゃんと助走できる）
-    const s = segAt(p.x);
-    if (s){ const sx = Math.min(s[0] + 36, s[1] - 12); if (sx > a.safeX) a.safeX = sx; }
-  } else { p.onGround = false; }
+  // 着地
+  if (p.y >= FOOT && p.vy >= 0 && groundAt(p.x)){
+    p.y = FOOT; p.vy = 0; p.onGround = true;
+    const seg = segOf(p.x); if (seg){ const sx = Math.min(seg[0]+36, seg[1]-12); if (sx > s.safeX) s.safeX = sx; }
+  } else p.onGround = false;
 
-  // 穴に落ちた
-  if (p.y > H + 40) { a.dead = true; a.deadT = 0; sfxOuch(); }
+  // 落下 → ライフ-1
+  if (p.y > H+40){ loseLife('fall'); drawStage(); return; }
+  // 岩 → ライフ-1
+  for (const o of s.obs){ if (Math.abs(o.x-p.x) < 20 && p.y > FOOT-12){ loseLife('rock'); break; } }
 
-  // 障害物に ぶつかった (横から)
-  for (const o of a.obs){
-    if (Math.abs(o.x - p.x) < 20 && p.y > footY - 12){ // 地面近くで岩に接触（少し跳べば越えられる）
-      a.dead = true; a.deadT = 0; sfxOuch(); break;
+  // 武器（バトル・お城のみ）
+  const combat = (s.mode === 'defeat' || s.isCastle);
+  if (combat && keys.throwEdge){
+    s.carrots.push({ x:p.x+p.dir*12, y:p.y-6, vx:p.dir*6, vy:-7, dead:false }); // 山なり
+    sfxThrow();
+  }
+  if (s.sword.active){
+    s.sword.time -= dt;
+    if (s.sword.time <= 0){ s.sword.active=false; swordStarStop(); swordBtn.classList.add('hidden'); s.swordSpawnCd = 260; }
+    else if (keys.swordEdge && s.swordCd <= 0){
+      s.shocks.push({ x:p.x+p.dir*16, y:p.y-6, vx:p.dir*9, dmg:3, hits:[], dead:false }); // 衝撃波（貫通）
+      s.swordCd = 18; sfxZap();
+    }
+  }
+  if (combat && !s.sword.active && !s.swordItem){
+    s.swordSpawnCd -= dt; if (s.swordSpawnCd <= 0) spawnSwordItem();
+  }
+  if (s.swordItem){
+    const it = s.swordItem; it.bob += dt;
+    if (Math.abs(it.x - p.x) < 28 && Math.abs(it.y - p.y) < 60){
+      s.swordItem = null; s.sword.active = true; s.sword.time = 900;   // 15秒
+      swordBtn.classList.remove('hidden'); swordStarStart(); sfxPickup();
     }
   }
 
-  // ゴール
-  if (p.x >= a.end - 10 && !a.won){ a.won = true; clearTaskWin(); }
+  updateEnemies(dt);     if (s.over){ drawStage(); return; }
+  updateProjectiles(dt); if (s.over){ drawStage(); return; }
+
+  for (const pt of s.parts){ pt.x+=pt.vx*dt; pt.y+=pt.vy*dt; pt.vy+=0.3*dt; pt.life-=dt; }
+  s.parts = s.parts.filter(pt => pt.life > 0);
+
+  // バトルのスポーン
+  if (s.mode === 'defeat'){
+    if (s.timer % s.spec.spawnEvery < dt && s.enemies.length < 2 && s.defeated + s.enemies.length < s.need) spawnBattleEnemy();
+    if (s.enemies.length === 0 && s.defeated < s.need && s.timer > 30) spawnBattleEnemy();
+  }
+
+  // 勝利
+  if (s.mode === 'defeat'){ if (s.defeated >= s.need && !s.won){ s.won = true; winStage(); } }
+  else { if (p.x >= s.end - 10 && !s.won){ s.won = true; winStage(); } }
 
   // カメラ
-  a.cam = Math.max(0, Math.min(p.x - 120, a.end - W + 120));
-  drawAthletic();
+  s.cam = s.scroll ? Math.max(0, Math.min(p.x - 120, s.end - W + 160)) : 0;
+
+  drawStage();
 }
 
-function drawAthletic(){
-  const a = ath, p = a.p, cam = a.cam;
+function updateEnemies(dt){
+  const s = stage, p = s.p;
+  for (const e of s.enemies){
+    if (e.flash > 0) e.flash -= dt;
+    if (e.fromRight){ e.x -= e.speed*dt; }                       // バトル：左進
+    else { const d = p.x - e.x; if (Math.abs(d) < 240 && Math.abs(d) > 36) e.x += Math.sign(d)*e.speed*0.5*dt; } // お城：近づくと寄る
+    // ジャンプ（強化）
+    e.jumpCd -= dt;
+    if (e.jumpCd <= 0 && e.onGround){ e.vy = -7.5; e.onGround = false; e.jumpCd = 70+Math.random()*90; }
+    e.vy += 0.6*dt; e.y += e.vy*dt;
+    if (e.y >= FOOT){ e.y = FOOT; e.vy = 0; e.onGround = true; }
+    // 射撃（ライオン=火🔥 / 象=水💧）
+    e.shootCd -= dt;
+    if (e.shootCd <= 0){
+      const dir = (p.x < e.x) ? -1 : 1;
+      if (e.kind === 'lion') s.eproj.push({ emoji:'🔥', x:e.x+dir*14, y:e.y-6, vx:dir*4.4, dead:false });
+      else s.eproj.push({ emoji:'💧', x:e.x+dir*14, y:e.y-12, vx:dir*3.2, vy:-3.2, dead:false }); // 水は山なり
+      e.shootCd = 80+Math.random()*100;
+    }
+    // 踏みつけ（ダメージ1）
+    if (!e.dead && p.vy > 0 && Math.abs(e.x-p.x) < 26 && p.y < e.y-8){
+      e.hp -= 1; e.flash = 6; p.vy = -8; sfxHit();
+      if (e.hp <= 0){ killEnemy(e); continue; }
+    }
+    // 接触ダメージ
+    if (!e.dead && p.invuln <= 0 && Math.abs(e.x-p.x) < 24 && Math.abs(e.y-p.y) < 28 && p.vy <= 0){
+      loseLife('hit'); if (s.over) return;
+    }
+  }
+  s.enemies = s.enemies.filter(e => !e.dead && e.x > -50);
+}
+
+function updateProjectiles(dt){
+  const s = stage, p = s.p;
+  // にんじん（放物線・当たりづらい）
+  for (const c of s.carrots){
+    c.x += c.vx*dt; c.vy += 0.35*dt; c.y += c.vy*dt;
+    for (const e of s.enemies){
+      if (!e.dead && !c.dead && Math.abs(c.x-e.x) < 22 && Math.abs(c.y-e.y) < 24){
+        c.dead = true; e.hp -= 1; e.flash = 6; sfxHit(); if (e.hp <= 0) killEnemy(e);
+      }
+    }
+    if (c.y > FOOT+12 || c.x < s.cam-50 || c.x > s.cam+W+50) c.dead = true;
+  }
+  s.carrots = s.carrots.filter(c => !c.dead);
+  // 衝撃波（貫通・ダメージ3）
+  for (const sh of s.shocks){
+    sh.x += sh.vx*dt;
+    for (const e of s.enemies){
+      if (!e.dead && sh.hits.indexOf(e) < 0 && Math.abs(sh.x-e.x) < 30 && Math.abs(e.y-sh.y) < 44){
+        sh.hits.push(e); e.hp -= sh.dmg; e.flash = 6; sfxHit(); if (e.hp <= 0) killEnemy(e);
+      }
+    }
+    if (sh.x < s.cam-70 || sh.x > s.cam+W+70) sh.dead = true;
+  }
+  s.shocks = s.shocks.filter(sh => !sh.dead);
+  // 敵弾 → 当たるとライフ-1
+  for (const pr of s.eproj){
+    pr.x += pr.vx*dt; if (pr.vy !== undefined){ pr.vy += 0.18*dt; pr.y += pr.vy*dt; }
+    if (p.invuln <= 0 && Math.abs(pr.x-p.x) < 22 && Math.abs(pr.y-p.y) < 24){ pr.dead = true; loseLife('proj'); if (s.over) return; }
+    if (pr.x < s.cam-60 || pr.x > s.cam+W+60 || pr.y > H+10) pr.dead = true;
+  }
+  s.eproj = s.eproj.filter(pr => !pr.dead);
+}
+
+function drawStage(){
+  const s = stage, p = s.p, cam = s.cam;
   ctx.clearRect(0,0,W,H);
   // 空
   const sky = ctx.createLinearGradient(0,0,0,H);
-  sky.addColorStop(0,'#bfeaff'); sky.addColorStop(1,'#e8f9ff');
+  if (s.mode === 'defeat'){ sky.addColorStop(0,'#ffe7c2'); sky.addColorStop(1,'#fff4e0'); }
+  else if (s.isCastle){ sky.addColorStop(0,'#ffd29e'); sky.addColorStop(1,'#ffe6f2'); }
+  else { sky.addColorStop(0,'#bfeaff'); sky.addColorStop(1,'#e8f9ff'); }
   ctx.fillStyle = sky; ctx.fillRect(0,0,W,H);
-  // 雲
+  // 雲/ヤシ
   ctx.font = '26px serif';
-  for (let i=0;i<6;i++){ const cx = ((i*420 - cam*0.4) % (W+120)+W+120)%(W+120)-60; ctx.fillText('☁️', cx, 50 + (i%2)*34); }
+  for (let i=0;i<6;i++){ const cx = ((i*420 - cam*0.4)%(W+120)+W+120)%(W+120)-60; ctx.fillText(s.mode==='defeat'?'🌴':'☁️', cx, 58+(i%2)*30); }
   // 地面
-  ctx.fillStyle = '#8fd98f';
-  for (const s of a.segs){
-    const x1 = s[0]-cam, x2 = s[1]-cam;
-    if (x2 < -10 || x1 > W+10) continue;
-    ctx.fillRect(x1, GROUND_Y, x2-x1, H-GROUND_Y);
-    ctx.fillStyle = '#5cb85c'; ctx.fillRect(x1, GROUND_Y, x2-x1, 6); ctx.fillStyle = '#8fd98f';
+  for (const seg of s.segs){ const x1=seg[0]-cam, x2=seg[1]-cam; if (x2<-10||x1>W+10) continue;
+    ctx.fillStyle = s.mode==='defeat' ? '#e6c98f' : '#8fd98f'; ctx.fillRect(x1, GROUND_Y, x2-x1, H-GROUND_Y);
+    ctx.fillStyle = s.mode==='defeat' ? '#d4af6a' : '#5cb85c'; ctx.fillRect(x1, GROUND_Y, x2-x1, 6);
   }
-  // 障害物 (岩)
+  // 岩
   ctx.font = '28px serif';
-  for (const o of a.obs){ const ox = o.x-cam; if (ox>-30&&ox<W+30) ctx.fillText('🪨', ox-14, GROUND_Y-4); }
-  // ゴール旗
-  const gx = a.end - cam; if (gx < W+40) { ctx.font='34px serif'; ctx.fillText('🚩', gx-16, GROUND_Y-6); }
+  for (const o of s.obs){ const ox=o.x-cam; if (ox>-30&&ox<W+30) ctx.fillText('🪨', ox-14, GROUND_Y-4); }
+  // ゴール / お城
+  if (s.mode !== 'defeat'){ const gx = s.end - cam;
+    if (gx < W+70){
+      if (s.isCastle){ ctx.font='42px serif'; ctx.fillText('🏰', gx-22, GROUND_Y-2); ctx.font='26px serif'; ctx.fillText('🐹', gx+14, GROUND_Y-2); }
+      else { ctx.font='34px serif'; ctx.fillText('🚩', gx-16, GROUND_Y-6); }
+    }
+  }
+  // 剣アイテム
+  if (s.swordItem){ const it=s.swordItem; const iy = it.y + Math.sin(it.bob*0.2)*4;
+    ctx.font='26px serif'; ctx.fillText('⚔️', it.x-cam-12, iy);
+    ctx.fillStyle='#b58900'; ctx.font='bold 11px sans-serif'; ctx.fillText('とれ!', it.x-cam-12, iy-18);
+  }
+  // 敵 + HPバー
+  for (const e of s.enemies){ const ex=e.x-cam;
+    ctx.save(); if (e.flash>0) ctx.globalAlpha = 0.4+0.6*Math.abs(Math.sin(e.flash)); ctx.font='30px serif'; ctx.fillText(e.emoji, ex-16, e.y+10); ctx.restore();
+    const bw=30, hpw=bw*Math.max(0,e.hp)/e.maxHp;
+    ctx.fillStyle='rgba(0,0,0,.18)'; ctx.fillRect(ex-15, e.y-28, bw, 4);
+    ctx.fillStyle = e.kind==='elephant' ? '#5fa8ff' : '#ff7a52'; ctx.fillRect(ex-15, e.y-28, hpw, 4);
+  }
+  // にんじん / 衝撃波 / 敵弾 / パーティクル
+  ctx.font='20px serif'; for (const c of s.carrots) ctx.fillText('🥕', c.x-cam-10, c.y+8);
+  ctx.font='26px serif'; for (const sh of s.shocks) ctx.fillText('🌀', sh.x-cam-13, sh.y+9);
+  ctx.font='20px serif'; for (const pr of s.eproj) ctx.fillText(pr.emoji, pr.x-cam-10, pr.y+7);
+  ctx.font='14px serif'; for (const pt of s.parts) ctx.fillText('✨', pt.x-cam-6, pt.y);
   // プレイヤー
-  ctx.font = '30px serif';
-  const pe = a.dead ? '💫' : '🐰';
   ctx.save();
-  ctx.translate(p.x-cam, p.y);
-  ctx.fillText(pe, -16, 8);
+  if (p.invuln>0 && Math.floor(p.invuln/4)%2===0) ctx.globalAlpha = 0.4;
+  if (s.sword.active){ ctx.font='15px serif'; ctx.fillText('✨', p.x-cam-22, p.y-12); ctx.fillText('✨', p.x-cam+12, p.y-12); }
+  ctx.font='30px serif'; ctx.fillText(s.dead?'💫':'🐰', p.x-cam-16, p.y+8);
+  if (s.sword.active){ ctx.font='22px serif'; ctx.fillText('⚔️', p.x-cam + p.dir*12 - 11, p.y+2); }
   ctx.restore();
-}
-
-/* =========================================================
-   敵バトル
-   ========================================================= */
-let bat;
-function initBattle(cfg){
-  current = 'battle';
-  bat = {
-    cfg,
-    p: { x: 70, y: GROUND_Y - 34, vy: 0, onGround: true },
-    enemies: [], carrots: [], parts: [],
-    hp: 3, defeated: 0, timer: 0, won: false, hurtCd: 0,
-  };
-  document.getElementById('hudInfo').textContent = '❤❤❤';
-}
-
-function spawnEnemy(){
-  const cfg = bat.cfg;
-  const kind = cfg.kinds[Math.floor(Math.random()*cfg.kinds.length)];
-  const isElephant = kind === 'elephant';
-  bat.enemies.push({
-    kind, x: W + 20, y: GROUND_Y - 30,
-    speed: (isElephant ? 0.7 : 1.2) + Math.random()*0.4,
-    hp: isElephant ? 2 : 1, emoji: isElephant ? '🐘' : '🦁', flash:0,
-  });
-}
-
-function updateBattle(dt){
-  const b = bat, p = b.p, cfg = b.cfg;
-  b.timer += dt;
-  if (b.hurtCd > 0) b.hurtCd -= dt;
-
-  // 移動 (左右)
-  const sp = 4;
-  if (keys.left) p.x -= sp*dt;
-  if (keys.right) p.x += sp*dt;
-  p.x = Math.max(24, Math.min(W-24, p.x));
-  // ジャンプ
-  if (keys.jumpEdge && p.onGround){ p.vy = -10; p.onGround=false; sfxJump(); }
-  p.vy += 0.6*dt; p.y += p.vy*dt;
-  if (p.y >= GROUND_Y-34){ p.y = GROUND_Y-34; p.vy=0; p.onGround=true; }
-  // なげる
-  if (keys.throwEdge){
-    b.carrots.push({ x: p.x+12, y: p.y, vx: 7 });
-    sfxThrow();
-  }
-
-  // スポーン
-  if (b.timer % cfg.spawnEvery < dt && b.defeated + b.enemies.length < cfg.need + 2){
-    if (b.defeated + b.enemies.length < cfg.need) spawnEnemy();
-  }
-  if (b.enemies.length === 0 && b.defeated < cfg.need && b.timer > 30) spawnEnemy();
-
-  // ニンジン
-  for (const c of b.carrots){ c.x += c.vx*dt; }
-  b.carrots = b.carrots.filter(c => c.x < W+20);
-
-  // 敵
-  for (const e of b.enemies){
-    e.x -= e.speed*dt;
-    if (e.flash>0) e.flash -= dt;
-    // ニンジン命中
-    for (const c of b.carrots){
-      if (!c.dead && Math.abs(c.x-e.x)<22 && Math.abs(c.y-e.y)<26){
-        c.dead = true; e.hp--; e.flash = 6; sfxHit();
-        if (e.hp <= 0){ e.dead = true; b.defeated++; addParts(e.x,e.y); }
-      }
-    }
-    // 踏みつけ (上から)
-    if (!e.dead && Math.abs(e.x-p.x)<26 && p.vy>0 && p.y < e.y-6){
-      e.hp--; e.flash=6; p.vy=-8; sfxHit();
-      if (e.hp<=0){ e.dead=true; b.defeated++; addParts(e.x,e.y); }
-    }
-    // プレイヤーに 接触 (横)
-    if (!e.dead && b.hurtCd<=0 && Math.abs(e.x-p.x)<26 && Math.abs(e.y-p.y)<28 && p.vy<=0){
-      b.hp--; b.hurtCd = 60; sfxOuch();
-      document.getElementById('hudInfo').textContent = '❤'.repeat(Math.max(0,b.hp)) + '🤍'.repeat(3-Math.max(0,b.hp));
-      e.x -= 30;
-      if (b.hp <= 0){ // 失敗 → やりなおし
-        setTimeout(()=>{ stopGame(); alert('やられちゃった…！ もういちど ちょうせんしよう💪'); buildHub(); show('hub'); }, 60);
-      }
-    }
-  }
-  b.carrots = b.carrots.filter(c => !c.dead);
-  b.enemies = b.enemies.filter(e => !e.dead && e.x > -30);
-
-  // パーティクル
-  for (const pt of b.parts){ pt.x+=pt.vx*dt; pt.y+=pt.vy*dt; pt.vy+=0.3*dt; pt.life-=dt; }
-  b.parts = b.parts.filter(pt => pt.life>0);
-
-  // クリア判定
-  if (b.defeated >= cfg.need && !b.won){ b.won = true; clearTaskWin(); }
-
-  drawBattle();
-}
-function addParts(x,y){ for(let i=0;i<8;i++) bat.parts.push({x,y,vx:(Math.random()-0.5)*6,vy:-Math.random()*5-1,life:20+Math.random()*10}); }
-
-function drawBattle(){
-  const b = bat, p = b.p;
-  ctx.clearRect(0,0,W,H);
-  const sky = ctx.createLinearGradient(0,0,0,H);
-  sky.addColorStop(0,'#ffe7c2'); sky.addColorStop(1,'#fff4e0');
-  ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
-  // 地面
-  ctx.fillStyle='#e6c98f'; ctx.fillRect(0,GROUND_Y,W,H-GROUND_Y);
-  ctx.fillStyle='#d4af6a'; ctx.fillRect(0,GROUND_Y,W,6);
-  // 残り
-  ctx.fillStyle='#a85'; ctx.font='bold 14px sans-serif';
-  ctx.fillText(`たおした: ${b.defeated}/${b.cfg.need}`, 12, 22);
-  // ニンジン
-  ctx.font='20px serif';
-  for (const c of b.carrots) ctx.fillText('🥕', c.x-10, c.y+8);
-  // 敵
-  ctx.font='30px serif';
-  for (const e of b.enemies){
-    ctx.save();
-    if (e.flash>0){ ctx.globalAlpha = 0.4 + 0.6*Math.abs(Math.sin(e.flash)); }
-    ctx.fillText(e.emoji, e.x-16, e.y+10);
-    ctx.restore();
-  }
-  // パーティクル
-  ctx.font='14px serif';
-  for (const pt of b.parts) ctx.fillText('✨', pt.x-6, pt.y);
-  // プレイヤー
-  ctx.font='30px serif';
-  ctx.save();
-  if (b.hurtCd>0 && Math.floor(b.hurtCd/4)%2===0) ctx.globalAlpha=0.4;
-  ctx.fillText('🐰', p.x-16, p.y+8);
-  ctx.restore();
+  // キャンバス内HUD
+  ctx.font='bold 14px sans-serif';
+  if (s.mode === 'defeat'){ ctx.fillStyle='rgba(80,60,40,.85)'; ctx.fillText(`たおした: ${s.defeated}/${s.need}`, 12, 22); }
+  if (s.sword.active){ ctx.fillStyle='#b58900'; ctx.fillText(`⚔️ ${Math.ceil(s.sword.time/60)}秒`, W-76, 22); }
 }
 
 /* =========================================================
@@ -788,12 +950,14 @@ window.addEventListener('keydown', (e) => {
   else if (e.key==='ArrowRight') keys.right=true;
   else if (e.key==='ArrowUp'||e.code==='Space'||e.key===' '){ if(!keys.jump) keys.jumpEdge=true; keys.jump=true; }
   else if (e.key.toLowerCase()==='x'||e.key==='ArrowDown'){ if(!keys.throw) keys.throwEdge=true; keys.throw=true; }
+  else if (e.key.toLowerCase()==='z'){ if(!keys.sword) keys.swordEdge=true; keys.sword=true; }
 });
 window.addEventListener('keyup', (e) => {
   if (e.key==='ArrowLeft') keys.left=false;
   else if (e.key==='ArrowRight') keys.right=false;
   else if (e.key==='ArrowUp'||e.code==='Space'||e.key===' ') keys.jump=false;
   else if (e.key.toLowerCase()==='x'||e.key==='ArrowDown') keys.throw=false;
+  else if (e.key.toLowerCase()==='z') keys.sword=false;
 });
 // タッチ/クリックボタン
 document.querySelectorAll('.key').forEach(btn => {
@@ -803,12 +967,14 @@ document.querySelectorAll('.key').forEach(btn => {
     else if (k==='right') keys.right=true;
     else if (k==='jump'){ if(!keys.jump) keys.jumpEdge=true; keys.jump=true; }
     else if (k==='throw'){ if(!keys.throw) keys.throwEdge=true; keys.throw=true; }
+    else if (k==='sword'){ if(!keys.sword) keys.swordEdge=true; keys.sword=true; }
   };
   const release = (e) => { e.preventDefault();
     if (k==='left') keys.left=false;
     else if (k==='right') keys.right=false;
     else if (k==='jump') keys.jump=false;
     else if (k==='throw') keys.throw=false;
+    else if (k==='sword') keys.sword=false;
   };
   btn.addEventListener('touchstart', press, {passive:false});
   btn.addEventListener('touchend', release, {passive:false});
@@ -837,8 +1003,12 @@ document.getElementById('pasteBtn').addEventListener('click', () => {
   game.collected[idx] = true;
   save();
   setTimeout(() => {
-    buildHub();
-    show('hub');
+    if (game.collected.every(Boolean)){
+      startCastle();              // 4枚そろったら そのまま「さいごの試練：お城へ」
+    } else {
+      buildHub();
+      show('hub');
+    }
   }, 700);
 });
 
