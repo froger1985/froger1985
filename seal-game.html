@@ -140,6 +140,18 @@
   .task .go { font-size: .9rem; padding: 8px 16px; }
   .badge { font-size: .7rem; background: var(--yellow); color: #7a5a00; padding: 2px 8px; border-radius: 999px; font-weight: bold; }
 
+  /* ---- difficulty selector ---- */
+  .diff { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .diff-label { font-weight: bold; font-size: .9rem; }
+  .diff-btn {
+    flex: 1; min-width: 120px; font-family: inherit; font-weight: bold; cursor: pointer;
+    border: 3px solid #ecd9cf; background: #fff; color: var(--ink);
+    border-radius: 14px; padding: 8px 10px; font-size: .95rem; line-height: 1.2;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .diff-btn small { font-weight: normal; font-size: .65rem; opacity: .7; }
+  .diff-btn.on { border-color: var(--pink-d); background: #fff0f6; color: var(--pink-d); box-shadow: 0 3px 0 #ffd0e2; }
+
   /* ---- canvas game ---- */
   #gameWrap { padding: 10px; }
   #gameHud {
@@ -242,6 +254,12 @@
     </div>
 
     <div class="book" id="book"></div>
+
+    <div id="diffSelect" class="diff">
+      <span class="diff-label">なんいど：</span>
+      <button class="diff-btn" data-diff="easy">💖 イージー<small>ライフへらない</small></button>
+      <button class="diff-btn" data-diff="normal">🔥 ふつう</button>
+    </div>
 
     <h2>📋 ハムスターの ミッション</h2>
     <div id="taskList"></div>
@@ -458,7 +476,7 @@ const TASKS = [
    セーブ
    ========================================================= */
 const SAVE_KEY = 'sealGameSave_v1';
-let game = { name:'', collected:[false,false,false,false] };
+let game = { name:'', collected:[false,false,false,false], easy:false };
 function load(){
   try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.collected) game = s; } catch(e){}
 }
@@ -558,6 +576,13 @@ function buildHub(){
     list.insertBefore(banner, list.firstChild);
     document.getElementById('goCastle').addEventListener('click', startCastle);
   }
+
+  // なんいど（イージー / ふつう）トグル
+  document.querySelectorAll('#diffSelect .diff-btn').forEach(b => {
+    const isEasy = b.dataset.diff === 'easy';
+    b.classList.toggle('on', isEasy === !!game.easy);
+    b.onclick = () => { game.easy = isEasy; save(); buildHub(); };
+  });
 }
 
 /* =========================================================
@@ -686,6 +711,7 @@ function startStage(spec){
 }
 
 function renderHearts(){
+  if (game.easy){ hudInfo.textContent = '💖∞'; return; }   // イージーは無限ライフ表示
   const n = stage ? Math.max(0, stage.lives) : 3;
   const max = stage ? stage.maxLives : 3;
   hudInfo.textContent = '❤'.repeat(n) + '🤍'.repeat(Math.max(0, max-n));
@@ -703,6 +729,12 @@ function respawn(){
 function loseLife(src){
   const s = stage, p = s.p;
   if (p.invuln > 0 && src !== 'fall') return;       // 無敵中は接触/弾/岩を無効
+  // イージーモード：ライフは減らない（落ちたら復帰・被弾はノックバックだけ）
+  if (game.easy){
+    if (src === 'fall'){ sfxFall(); s.dead = true; s.deadPause = 0; }
+    else { sfxOuch(); p.invuln = 72; p.vy = -5; p.vx = (src==='rock') ? -p.dir*4 : (p.x < W/2 ? 3.5 : -3.5); }
+    return;
+  }
   s.lives--;
   renderHearts();
   if (src === 'fall') sfxFall(); else sfxOuch();
