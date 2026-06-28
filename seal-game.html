@@ -31,6 +31,14 @@
     overflow-x: hidden;            /* 縦スクロールは許可（ステージ2以降に届くように） */
   }
 
+  #muteBtn {
+    position: absolute; top: 8px; right: 8px; z-index: 50;
+    width: 38px; height: 38px; border-radius: 50%; border: 2px solid #fff;
+    background: rgba(255,255,255,.85); font-size: 1.1rem; cursor: pointer;
+    box-shadow: 0 2px 6px rgba(255,93,143,.25); line-height: 1;
+  }
+  #muteBtn:active { transform: scale(.92); }
+
   #app {
     width: 100%;
     max-width: 480px;
@@ -273,6 +281,7 @@
 </head>
 <body>
 <div id="app">
+  <button id="muteBtn" aria-label="おとの オン/オフ">🔊</button>
 
   <!-- ===== TITLE ===== -->
   <section id="screen-title" class="screen active">
@@ -414,8 +423,13 @@ function initAudio(){
   if (!Ctx) return;
   AC = new Ctx();
   master = AC.createGain();
-  master.gain.value = 0.5;
+  master.gain.value = game.muted ? 0 : 0.5;
   master.connect(AC.destination);
+}
+function applyMute(){
+  const btn = document.getElementById('muteBtn');
+  if (btn) btn.textContent = game.muted ? '🔇' : '🔊';
+  if (master && AC) master.gain.setTargetAtTime(game.muted ? 0 : 0.5, AC.currentTime, 0.02);
 }
 function tone(freq, t0, dur, type='sine', vol=0.25){
   if (!AC) return;
@@ -515,7 +529,92 @@ function swordStarStart(){
     i++;
   }, 120);
 }
-function swordStarStop(){ if(starTimer){ clearInterval(starTimer); starTimer=null; } }
+function swordStarStop(){
+  if(starTimer){ clearInterval(starTimer); starTimer=null; }
+  // 剣のスター曲が終わったらステージBGMの音量を戻す
+  if(bgmGain && AC && curBgm) bgmGain.gain.setTargetAtTime(BGM_VOL, AC.currentTime, 0.1);
+}
+
+/* =========================================================
+   ステージBGM（Web Audioで自作・5種ループ）
+   ========================================================= */
+let bgmGain = null, bgmTimer = null, curBgm = null, bgmStep = 0;
+const BGM_VOL = 0.2;
+function ensureBgmGain(){
+  if(!bgmGain && AC){ bgmGain = AC.createGain(); bgmGain.gain.value = 0.0001; bgmGain.connect(master); }
+}
+// BGM専用ノート（bgmGainへ）
+function bnote(f, dur, type='triangle', vol=0.2, when=0){
+  if(!AC || !bgmGain) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = f;
+  o.connect(g); g.connect(bgmGain);
+  const t = AC.currentTime + when;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.start(t); o.stop(t + dur + 0.03);
+}
+const R = 0; // 休符
+const BGM = {
+  // ① お風呂が沸きました風：やさしく軽やかな長調
+  bath: { stepMs: 300, len: 16, play(i){
+    const mel = [523,659,784,1046, 988,784,880,784, 698,784,880,1046, 988,R,784,R];
+    const f = mel[i]; if(f) bnote(f, 0.34, 'triangle', 0.2);
+    if(i%4===0) bnote([131,98,117,131][i/4|0]||131, 0.5, 'sine', 0.16); // やわらかいベース
+    if(f) bnote(f*2, 0.18, 'sine', 0.04); // キラ
+  }},
+  // ② ゴジラ風：低音オスティナート＋半音/不協で不気味
+  kaiju: { stepMs: 240, len: 8, play(i){
+    const low = [82.4,82.4,87.3,R, 82.4,82.4,77.8,R]; // E2 E2 F2 . E2 E2 D#2 .
+    const f = low[i];
+    if(f){ bnote(f, 0.22, 'sawtooth', 0.26); bnote(f/2, 0.24, 'square', 0.14); }
+    if(i===3 || i===7) bnote(116.5, 0.4, 'sawtooth', 0.12); // 不協のうなり(A#2)
+    bnote(41, 0.18, 'square', 0.18); // ずしっと低い鼓動
+  }},
+  // ③ ぽーんぽぽんぽーん：弾む軽快な高音
+  pon: { stepMs: 190, len: 16, play(i){
+    const mel = [784,R,988,784, 1046,988,784,R, 880,R,1046,880, 1175,1046,880,R];
+    const f = mel[i]; if(f) bnote(f, 0.16, 'sine', 0.2);
+    if(i%4===0) bnote(392, 0.18, 'triangle', 0.12); // 軽いベース
+  }},
+  // ④ ボス：ずんずん(重低音)→急にキンキン(高音)で不安をあおる
+  boss: { stepMs: 170, len: 16, play(i){
+    if(i < 8){ // ずんずんずんずん
+      bnote(55, 0.16, 'sawtooth', 0.3); bnote(110, 0.14, 'square', 0.1);
+    } else { // キンキン高音（不協で不安）
+      const hi = [1568,1661,1568,1865, 1568,1661,1976,1568];
+      bnote(hi[i-8], 0.1, 'sawtooth', 0.16);
+      bnote(hi[i-8]*1.06, 0.1, 'square', 0.06); // 半音ずれでキンつく
+      bnote(55, 0.16, 'sawtooth', 0.16); // 低音ドローンは継続
+    }
+  }},
+  // ⑤ 表彰式風：堂々としたファンファーレ／行進曲（長調）
+  award: { stepMs: 300, len: 16, play(i){
+    const mel = [784,784,784,1046, 988,1046,1318,R, 1046,988,784,880, 1046,R,1318,R];
+    const f = mel[i]; if(f){ bnote(f, 0.32, 'sawtooth', 0.16); bnote(f, 0.32, 'triangle', 0.1); }
+    if(i%4===0){ const bass=[262,196,262,349][i/4|0]||262; bnote(bass, 0.5, 'triangle', 0.16); bnote(bass/2, 0.5, 'sine', 0.1); }
+    if(i%4===2) bnote([392,392,392,523][i/4|0]||392, 0.24, 'triangle', 0.08); // ハモり
+  }},
+};
+function startBGM(name){
+  initAudio(); if(!AC) return; ensureBgmGain();
+  if(bgmTimer){ clearInterval(bgmTimer); bgmTimer=null; }
+  curBgm = name; bgmStep = 0;
+  const tr = BGM[name]; if(!tr) return;
+  bgmGain.gain.cancelScheduledValues(AC.currentTime);
+  bgmGain.gain.setValueAtTime(0.0001, AC.currentTime);
+  bgmGain.gain.linearRampToValueAtTime(BGM_VOL, AC.currentTime + 0.4);
+  bgmTimer = setInterval(() => {
+    if(!AC || AC.state === 'suspended') return;
+    tr.play(bgmStep % tr.len); bgmStep++;
+  }, tr.stepMs);
+}
+function stopBGM(){
+  if(bgmTimer){ clearInterval(bgmTimer); bgmTimer=null; }
+  curBgm = null;
+  if(bgmGain && AC) bgmGain.gain.setTargetAtTime(0.0001, AC.currentTime, 0.06);
+}
 
 /* =========================================================
    ゲームデータ
@@ -566,7 +665,7 @@ const TASKS = [
    セーブ
    ========================================================= */
 const SAVE_KEY = 'sealGameSave_v1';
-let game = { name:'', collected:[false,false,false,false], easy:false };
+let game = { name:'', collected:[false,false,false,false], easy:false, muted:false };
 function load(){
   try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.collected) game = s; } catch(e){}
 }
@@ -587,6 +686,16 @@ function show(name){
 const nameInput = document.getElementById('nameInput');
 load();
 if (game.name) nameInput.value = game.name;
+
+// 音 オン/オフ トグル
+applyMute();
+document.getElementById('muteBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  initAudio();
+  game.muted = !game.muted;
+  save();
+  applyMute();
+});
 
 document.getElementById('startBtn').addEventListener('click', () => {
   initAudio();
@@ -702,10 +811,11 @@ function startTask(id){
   document.getElementById('hudTask').textContent = curTask.ico + ' ' + curTask.title;
   show('game');
   const c = curTask.cfg;
+  const bgm = ['bath','kaiju','pon','boss'][id];   // ステージごとのBGM
   if (curTask.type === 'athletic')
-    startStage({ mode:'reach', scroll:true, segs:c.segs, obs:c.obs, end:c.end, speed:c.speed });
+    startStage({ mode:'reach', scroll:true, segs:c.segs, obs:c.obs, end:c.end, speed:c.speed, bgm });
   else
-    startStage({ mode:'defeat', scroll:false, need:c.need, kinds:c.kinds, spawnEvery:c.spawnEvery });
+    startStage({ mode:'defeat', scroll:false, need:c.need, kinds:c.kinds, spawnEvery:c.spawnEvery, bgm });
 }
 
 // 全シール収集後の「さいごの試練：お城へ」（敵＋アスレチックの複合面）
@@ -720,12 +830,12 @@ function startCastle(){
     obs:[200],
     placedEnemies:[ {kind:'lion',x:780}, {kind:'elephant',x:1280},
                     {kind:'lion',x:1780}, {kind:'elephant',x:2350} ],
-    end:2700, speed:1.05,
+    end:2700, speed:1.05, bgm:'award',
   });
 }
 
 function startLoop(){ if (running) return; running = true; lastT = performance.now(); requestAnimationFrame(loop); }
-function stopGame(){ running = false; swordStarStop(); }
+function stopGame(){ running = false; swordStarStop(); stopBGM(); }
 
 function loop(){
   if (!running) return;
@@ -755,6 +865,7 @@ document.getElementById('retryBackBtn').addEventListener('click', () => {
 if (typeof location !== 'undefined' && location.search.indexOf('test') !== -1){
   window.__win   = () => { if (stage) winStage(); };
   window.__sword = () => { if (stage){ stage.swordItem=null; stage.sword.active=true; stage.sword.time=900; swordBtn.classList.remove('hidden'); swordStarStart(); } };
+  window.__audio = () => ({ curBgm, bgmOn: !!bgmTimer, muted: game.muted, master: master ? master.gain.value : null, bgmGain: bgmGain ? bgmGain.gain.value : null });
   window.__state = () => stage ? {
     mode:stage.mode, x:Math.round(stage.p.x), y:Math.round(stage.p.y), onG:stage.p.onGround,
     lives:stage.lives, dead:stage.dead, over:stage.over, won:stage.won,
@@ -801,6 +912,7 @@ function startStage(spec){
     : '⌨ <b>←→</b>/<b>A</b><b>D</b> うごく ・ <b>Space</b> ジャンプ';
   renderHearts();
   document.getElementById('retry').classList.remove('show');
+  if (spec.bgm) startBGM(spec.bgm);   // ステージBGM開始
   startLoop();
 }
 
