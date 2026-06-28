@@ -127,6 +127,30 @@
   .slot .sticker-img { width: 74%; height: 74%; }
   .reward-card .big .sticker-img { width: 4.4rem; height: 4.4rem; }
   .sticker-mini { width: 1.2rem; height: 1.2rem; object-fit: contain; vertical-align: -3px; }
+
+  /* ---- どうぶつシール（絵文字＋キラ枠） ---- */
+  .animal-sticker {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:100%; aspect-ratio:1/1; border-radius:14px;
+    background:linear-gradient(135deg,#fff0f6,#eaf6ff,#fff7e0);
+    border:2px solid #ffd0e2; box-shadow: inset 0 1px 4px rgba(255,255,255,.8), 0 1px 3px rgba(255,93,143,.18);
+    position:relative; overflow:hidden;
+  }
+  .animal-sticker::after { content:"✨"; position:absolute; top:1px; right:3px; font-size:.6rem; opacity:.8; }
+  .animal-sticker .a-emoji { font-size:1.9rem; line-height:1; }
+  .animal-sticker.silhouette { background:#f1e7e1; border-color:#e7d3c9; box-shadow:none; }
+  .animal-sticker.silhouette::after { content:""; }
+  .animal-sticker.silhouette .a-emoji { filter:grayscale(1); opacity:.4; font-size:1.3rem; }
+  .reward-card .big .animal-sticker { width:4.4rem; height:4.4rem; }
+  .reward-card .big .animal-sticker .a-emoji { font-size:3rem; }
+
+  /* ボーナス図鑑 */
+  #bonusBox { margin-top: 14px; background:#fff; border:3px dashed var(--mint); border-radius:16px; padding:12px 12px 14px; }
+  .bonus-head { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+  .bonus-head h2 { margin:0; font-size:1.05rem; }
+  .zk-count { color:#4fb89a; font-size:.95rem; }
+  .zukan { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:6px; }
+  .aslot { display:block; }
   .tier-water { animation: wobble 1.6s ease-in-out infinite; }
   @keyframes wobble { 0%,100%{ transform: rotate(-7deg);} 50%{ transform: rotate(7deg);} }
   .tier-shaka { position: relative; animation: shaka .25s linear infinite; }
@@ -327,6 +351,8 @@
 
     <h2>📋 ハムスターの ミッション</h2>
     <div id="taskList"></div>
+
+    <div id="bonusBox" style="display:none;"></div>
 
     <p class="foot">あつめたシール <b><span id="progressNum">0</span>/4</b> ／ シール交換の "レア度" を めざせ！</p>
   </section>
@@ -646,6 +672,16 @@ function stickerHTML(s, silhouette){
   return `<img class="sticker-img tier-${s.tier}${silhouette?' silhouette':''}" src="${s.img}" alt="${s.name}">`;
 }
 
+// ボーナス：どうぶつシール 15種（絵文字＋キラ枠）
+const ANIMALS = [
+  {e:'🐶',n:'いぬ'},{e:'🐱',n:'ねこ'},{e:'🐰',n:'うさぎ'},{e:'🐻',n:'くま'},{e:'🐼',n:'パンダ'},
+  {e:'🦊',n:'きつね'},{e:'🐯',n:'とら'},{e:'🦁',n:'ライオン'},{e:'🐮',n:'うし'},{e:'🐷',n:'ぶた'},
+  {e:'🐸',n:'かえる'},{e:'🐵',n:'さる'},{e:'🐔',n:'にわとり'},{e:'🐧',n:'ペンギン'},{e:'🐨',n:'コアラ'},
+];
+function animalHTML(a, silhouette){
+  return `<span class="animal-sticker${silhouette?' silhouette':''}"><span class="a-emoji">${silhouette?'❓':a.e}</span></span>`;
+}
+
 const TASKS = [
   { id:0, type:'athletic', ico:'🏃', title:'はじめての アスレチック',
     desc:'あなを ジャンプで こえて ゴールへ！', reward:0,
@@ -665,9 +701,13 @@ const TASKS = [
    セーブ
    ========================================================= */
 const SAVE_KEY = 'sealGameSave_v1';
-let game = { name:'', collected:[false,false,false,false], easy:false, muted:false };
+let game = { name:'', collected:[false,false,false,false], easy:false, muted:false,
+             cleared:false, zukan:new Array(15).fill(false) };
 function load(){
   try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.collected) game = s; } catch(e){}
+  // 旧セーブとの互換：足りないフィールドを補完
+  if (typeof game.cleared !== 'boolean') game.cleared = false;
+  if (!Array.isArray(game.zukan) || game.zukan.length !== 15) game.zukan = new Array(15).fill(false);
 }
 function save(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(game)); } catch(e){} }
 
@@ -776,6 +816,26 @@ function buildHub(){
     document.getElementById('goCastle').addEventListener('click', startCastle);
   }
 
+  // クリア後の特典：ランダムステージ＋どうぶつシール図鑑
+  const bonusBox = document.getElementById('bonusBox');
+  if (game.cleared){
+    const got = game.zukan.filter(Boolean).length;
+    const slots = ANIMALS.map((a,i)=>`<div class="aslot${game.zukan[i]?' filled':''}">${animalHTML(a, !game.zukan[i])}</div>`).join('');
+    const done = got >= ANIMALS.length;
+    bonusBox.innerHTML = `
+      <div class="bonus-head">
+        <h2>🎁 どうぶつシール ずかん <span class="zk-count">${got}/${ANIMALS.length}</span></h2>
+        <button class="btn go" id="goBonus">${done?'もういちど あそぶ':'ランダムステージで GET！'}</button>
+      </div>
+      <div class="d" style="opacity:.75; margin:-2px 0 8px;">あそぶたびに 1まい もらえる（おなじ動物は でない）。${done?'★ぜんぶ あつめた！★':'コンプリートを めざそう！'}</div>
+      <div class="zukan">${slots}</div>`;
+    bonusBox.style.display = 'block';
+    document.getElementById('goBonus').addEventListener('click', startBonus);
+  } else {
+    bonusBox.style.display = 'none';
+    bonusBox.innerHTML = '';
+  }
+
   // なんいど（イージー / ふつう）トグル
   document.querySelectorAll('#diffSelect .diff-btn').forEach(b => {
     const isEasy = b.dataset.diff === 'easy';
@@ -834,6 +894,77 @@ function startCastle(){
   });
 }
 
+/* ========== ボーナス：ランダムステージ（毎回ちがう・安全ルール内） ========== */
+// シード乱数（?seed= 指定時は再現可能。テスト用）
+let rng = Math.random;
+(function(){
+  const m = (location.search.match(/seed=(\d+)/));
+  if (m){ let s = (parseInt(m[1],10) >>> 0) || 1;
+    rng = function(){ s |= 0; s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s>>>15), 1 | s);
+      t = (t + Math.imul(t ^ (t>>>7), 61 | t)) ^ t; return ((t ^ (t>>>14)) >>> 0) / 4294967296; }; }
+})();
+const rnd = (a,b) => a + rng()*(b-a);
+const rndInt = (a,b) => Math.floor(rnd(a, b+1));
+const pick = (arr) => arr[Math.floor(rng()*arr.length)];
+
+let lastSpec = null;
+// 安全レイアウト生成：穴幅 ≤ ジャンプ可能、足場は十分広く、岩は穴から離す
+function genRandomSpec(){
+  const gaps = rndInt(2,5);
+  const segs = []; let x = 0;
+  // 最初の足場（助走）
+  let w0 = rndInt(360,440); segs.push([0, w0]); x = w0;
+  for (let i=0;i<gaps;i++){
+    const gap = rndInt(100,130);      // ジャンプで必ず越えられる幅
+    x += gap;
+    const sw = rndInt(320,440);       // 着地後に助走できる広さ
+    segs.push([x, x+sw]); x += sw;
+  }
+  const end = x - 60;                  // ゴールは最終足場の中
+  // 岩：足場の中央のみ・着地点の先＆穴の手前に十分な余裕（飛び越えた勢いで穴に落ちない）
+  const obs = [];
+  for (const s of segs){
+    const lo = s[0] + 120, hi = s[1] - 190;   // 助走確保＆穴の縁から距離
+    if (hi > lo && rng() < 0.55){
+      const ox = Math.round(rnd(lo, hi));
+      if (ox > 380 && ox < end-80) obs.push(ox);
+    }
+  }
+  // 敵：足場の中央に 0〜3 体（お城と同じ“その場”挙動）
+  const enemyN = rndInt(0,3);
+  const placedEnemies = [];
+  for (let i=0;i<enemyN;i++){
+    const s = segs[1 + Math.floor(rng()*(segs.length-1))];
+    const ex = Math.round(rnd(s[0]+60, s[1]-60));
+    if (ex < end-40) placedEnemies.push({ kind: pick(['lion','elephant']), x: ex });
+  }
+  // ランダム要素
+  const grav = pick([0.5, 0.6]);                 // つきめん(0.5) or ふつう(0.6)。重すぎは入れない
+  const speed = +rnd(1.0,1.15).toFixed(2);
+  const bgm = pick(['bath','kaiju','pon','boss','award']);
+  // 開始時の予告ラベル
+  const events = [];
+  if (grav === 0.5) events.push('🌙 つきめん！ ふわふわジャンプ');
+  if (speed >= 1.1) events.push('💨 ダッシュ！');
+  if (enemyN >= 2) events.push('🦁 てきが いっぱい');
+  if (enemyN === 0) events.push('☮ へいわ');
+  const event = events.length ? pick(events) : '✨ なにが おきるかな？';
+  lastSpec = { mode:'reach', scroll:true, isBonus:true, segs, obs, placedEnemies, end, speed, grav, bgm, event };
+  return lastSpec;
+}
+function startBonus(){
+  initAudio();
+  if (game.zukan.every(Boolean)){          // すでにコンプ済みでも遊べる（ごほうび無し演出）
+    // 続行可（重複なしのため新規は出ない→クリア時に「コンプ済み」表示）
+  }
+  curTask = { reward:-1, type:'bonus', title:'ランダムステージ' };
+  document.getElementById('hudTask').textContent = '🎁 ランダムステージ';
+  show('game');
+  const spec = genRandomSpec();
+  startStage(spec);
+  goalEl.textContent = spec.event + '　／　🏁 ゴールして どうぶつシールGET！';
+}
+
 function startLoop(){ if (running) return; running = true; lastT = performance.now(); requestAnimationFrame(loop); }
 function stopGame(){ running = false; swordStarStop(); stopBGM(); }
 
@@ -854,6 +985,7 @@ document.getElementById('giveUpBtn').addEventListener('click', () => {
 document.getElementById('retryBtn').addEventListener('click', () => {
   document.getElementById('retry').classList.remove('show');
   if (curTask && curTask.type === 'castle') startCastle();
+  else if (curTask && curTask.type === 'bonus') startBonus();
   else startTask(curTask.id);
 });
 document.getElementById('retryBackBtn').addEventListener('click', () => {
@@ -866,6 +998,10 @@ if (typeof location !== 'undefined' && location.search.indexOf('test') !== -1){
   window.__win   = () => { if (stage) winStage(); };
   window.__sword = () => { if (stage){ stage.swordItem=null; stage.sword.active=true; stage.sword.time=900; swordBtn.classList.remove('hidden'); swordStarStart(); } };
   window.__audio = () => ({ curBgm, bgmOn: !!bgmTimer, muted: game.muted, master: master ? master.gain.value : null, bgmGain: bgmGain ? bgmGain.gain.value : null });
+  window.__zukan = () => game.zukan.slice();
+  window.__bonus = () => startBonus();
+  window.__spec  = () => lastSpec;
+  window.__gen   = () => genRandomSpec();
   window.__state = () => stage ? {
     mode:stage.mode, x:Math.round(stage.p.x), y:Math.round(stage.p.y), onG:stage.p.onGround,
     lives:stage.lives, dead:stage.dead, over:stage.over, won:stage.won,
@@ -892,8 +1028,9 @@ function startStage(spec){
   const segs = (spec.segs || [[0, W]]).map(s => s.slice());
   if (spec.mode === 'reach') segs[segs.length-1] = [segs[segs.length-1][0], spec.end + 260];
   stage = {
-    spec, mode: spec.mode, scroll: !!spec.scroll, isCastle: !!spec.isCastle,
+    spec, mode: spec.mode, scroll: !!spec.scroll, isCastle: !!spec.isCastle, isBonus: !!spec.isBonus,
     segs, obs: (spec.obs||[]).map(x => ({ x })), end: spec.end || W, speed: spec.speed || 1,
+    grav: spec.grav || 0.6,
     p: { x:60, y:FOOT, vx:0, vy:0, onGround:true, dir:1, invuln:0 },
     cam:0, safeX:60,
     lives:5, maxLives:5, dead:false, deadPause:0, over:false, won:false,
@@ -902,7 +1039,8 @@ function startStage(spec){
     defeated:0, need: spec.need||0, timer:0,
   };
   if (spec.placedEnemies) spec.placedEnemies.forEach(e => stage.enemies.push(makeEnemy(e.kind, e.x, false)));
-  const combat = (spec.mode === 'defeat' || spec.isCastle);
+  const hasEnemies = !!(spec.placedEnemies && spec.placedEnemies.length);
+  const combat = (spec.mode === 'defeat' || spec.isCastle || (spec.isBonus && hasEnemies));
   throwBtn.classList.toggle('hidden', !combat);
   swordBtn.classList.add('hidden');
   goalEl.textContent = spec.mode === 'defeat' ? `🥕 ${stage.need}たい たおせ！`
@@ -962,6 +1100,7 @@ function winStage(){
   stopGame();
   stage.sword.active = false;
   if (stage.isCastle){ sfxClear(); setTimeout(() => startCutscene(), 500); }
+  else if (stage.isBonus){ sfxClear(); setTimeout(() => awardAnimal(), 350); }
   else { sfxClear(); setTimeout(() => showReward(curTask.reward), 350); }
 }
 
@@ -994,7 +1133,7 @@ function updateStage(dt){
   if (!keys.left && !keys.right) p.vx *= 0.8;
   p.vx = Math.max(-maxv, Math.min(maxv, p.vx));
   if (keys.jumpEdge && p.onGround){ p.vy = -11; p.onGround = false; sfxJump(); }
-  p.vy += 0.6*dt; p.x += p.vx*dt; p.y += p.vy*dt;
+  p.vy += s.grav*dt; p.x += p.vx*dt; p.y += p.vy*dt;
   if (p.x < 20){ p.x = 20; p.vx = 0; }
   if (!s.scroll && p.x > W-20){ p.x = W-20; p.vx = 0; }
 
@@ -1065,7 +1204,7 @@ function updateEnemies(dt){
     // ジャンプ（強化）
     e.jumpCd -= dt;
     if (e.jumpCd <= 0 && e.onGround){ e.vy = -7.5; e.onGround = false; e.jumpCd = 70+Math.random()*90; }
-    e.vy += 0.6*dt; e.y += e.vy*dt;
+    e.vy += s.grav*dt; e.y += e.vy*dt;
     if (e.y >= FOOT){ e.y = FOOT; e.vy = 0; e.onGround = true; }
     // 射撃（ライオン=火🔥 / 象=水💧）
     e.shootCd -= dt;
@@ -1228,15 +1367,63 @@ document.querySelectorAll('.key').forEach(btn => {
 /* =========================================================
    ごほうび演出 (シールを貼る)
    ========================================================= */
+let pendingAnimalIdx = null, bonusComplete = false;
+const pasteBtnEl = document.getElementById('pasteBtn');
+
 function showReward(idx){
   const s = STICKERS[idx];
   document.getElementById('rewardEmoji').innerHTML = stickerHTML(s, false);
   document.getElementById('rewardName').textContent = s.name;
   document.getElementById('rewardRate').textContent = s.rate;
   document.getElementById('rewardDesc').textContent = s.desc;
+  pasteBtnEl.textContent = 'シールちょうに はる！';
+  document.getElementById('reward').classList.add('show');
+}
+// ボーナス：どうぶつシール獲得（未所持から重複なし抽選）
+function awardAnimal(){
+  const remaining = [];
+  game.zukan.forEach((v,i)=>{ if(!v) remaining.push(i); });
+  if (remaining.length === 0){ showZukanComplete(); return; }
+  const idx = remaining[Math.floor(rng()*remaining.length)];
+  const a = ANIMALS[idx];
+  document.getElementById('rewardEmoji').innerHTML = animalHTML(a, false);
+  document.getElementById('rewardName').textContent = a.n + ' の シール';
+  document.getElementById('rewardRate').textContent = 'どうぶつシール';
+  document.getElementById('rewardDesc').textContent = `あたらしい どうぶつ！ ずかんに はろう（${game.zukan.filter(Boolean).length+1}/${ANIMALS.length}）`;
+  pasteBtnEl.textContent = 'ずかんに はる！';
+  pendingAnimalIdx = idx;
+  document.getElementById('reward').classList.add('show');
+}
+function showZukanComplete(){
+  confettiBurst(); fanfare();
+  document.getElementById('rewardEmoji').innerHTML = '<div style="font-size:3.6rem">🏆</div>';
+  document.getElementById('rewardName').textContent = 'どうぶつマスター！';
+  document.getElementById('rewardRate').textContent = `${ANIMALS.length}/${ANIMALS.length}`;
+  document.getElementById('rewardDesc').textContent = 'どうぶつシールを ぜんぶ あつめた！ すごい！';
+  pasteBtnEl.textContent = 'やったー！';
+  bonusComplete = true;
   document.getElementById('reward').classList.add('show');
 }
 document.getElementById('pasteBtn').addEventListener('click', () => {
+  // 図鑑コンプ祝いを閉じる
+  if (bonusComplete){
+    bonusComplete = false;
+    document.getElementById('reward').classList.remove('show');
+    buildHub(); show('hub'); return;
+  }
+  // どうぶつシールを図鑑に貼る
+  if (pendingAnimalIdx != null){
+    const idx = pendingAnimalIdx; pendingAnimalIdx = null;
+    document.getElementById('reward').classList.remove('show');
+    playChime(); burstSparkles();
+    game.zukan[idx] = true; save();
+    setTimeout(() => {
+      if (game.zukan.every(Boolean)) showZukanComplete();
+      else { buildHub(); show('hub'); }
+    }, 700);
+    return;
+  }
+  // 通常のシール（メイン4種）
   const idx = curTask.reward;
   document.getElementById('reward').classList.remove('show');
   playChime();              // 🔊 トゥルン、トゥルルルン！
@@ -1337,6 +1524,7 @@ window.addEventListener('keydown', (e) => {
    ========================================================= */
 function showEnding(){
   fanfare();
+  game.cleared = true; save();   // ボーナス「ランダムステージ」を解放
   document.getElementById('endText').innerHTML =
     `🐹「みごとだ <b>${game.name}</b>！ きみが あたらしい <b>支配人</b>だ！」<br>` +
     `🐰「やったー！ うれしい！ いっしょに シル活 つづけようね！」<br><br>` +
