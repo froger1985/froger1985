@@ -16,7 +16,7 @@
     --ink: #5a4a52;
   }
 
-  html, body { height: 100%; }
+  html { height: 100%; }   /* body は min-height で伸ばす（固定高さにするとはみ出しがスクロールできない） */
 
   body {
     background: linear-gradient(160deg, #ffe3ef 0%, #fff6ef 45%, #e6f7ff 100%);
@@ -25,10 +25,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    min-height: 100vh;
+    justify-content: flex-start;   /* 縦中央寄せだと高い内容が見切れてスクロール不能になる */
+    min-height: 100dvh;            /* モバイルのアドレスバー増減に対応 */
     padding: 12px;
-    overflow: hidden;
+    overflow-x: hidden;            /* 縦スクロールは許可（ステージ2以降に届くように） */
   }
 
   #app {
@@ -164,7 +164,8 @@
   }
   #gameHud .hearts { color: var(--pink-d); }
   canvas {
-    display: block; width: 100%; border-radius: 16px; background: #d7f0ff;
+    display: block; width: 100%; height: auto; aspect-ratio: 440 / 300;
+    border-radius: 16px; background: #d7f0ff;
     border: 3px solid #fff; box-shadow: inset 0 0 0 3px #bfe6ff;
   }
   #goal { text-align: center; margin: 8px 0 2px; font-weight: bold; color: var(--ink); }
@@ -248,6 +249,26 @@
   .cs-text { font-size:1.05rem; line-height:1.7; min-height:3.4em; color:var(--ink); }
   .cs-next { position:absolute; right:16px; bottom:9px; font-size:.74rem; color:var(--pink-d); animation:csblink 1s steps(1) infinite; }
   @keyframes csblink { 50%{ opacity:.25; } }
+
+  /* ---- スマホ（狭い画面）最適化 ---- */
+  @media (max-width: 430px) {
+    body { padding: 8px; }
+    .screen { padding: 16px 14px 22px; }
+    h1 { font-size: 1.4rem; }
+    .book { gap: 8px; padding: 12px 10px; }
+    .diff-btn { min-width: 0; font-size: .9rem; padding: 8px 6px; }
+    #gameWrap { padding: 6px; }
+    #gameHud { font-size: .9rem; padding: 2px 4px 8px; }
+    #pad { gap: 6px; margin-top: 10px; }
+    #pad .left-keys { gap: 6px; }
+    #pad .right-keys { gap: 6px; }
+    .key { width: 54px; height: 54px; font-size: 1.4rem; border-radius: 15px; }
+    .key.act { width: auto; padding: 0 12px; font-size: .9rem; }
+    .key.sword { padding: 0 10px; font-size: .85rem; }
+    .keyguide { font-size: .68rem; margin-top: 8px; }
+    .task { padding: 10px 12px; gap: 10px; }
+    .task .ico { font-size: 1.5rem; width: 32px; }
+  }
 </style>
 </head>
 <body>
