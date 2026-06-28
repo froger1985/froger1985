@@ -149,8 +149,10 @@
   .bonus-head { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
   .bonus-head h2 { margin:0; font-size:1.05rem; }
   .zk-count { color:#4fb89a; font-size:.95rem; }
-  .zukan { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:6px; }
+  .zukan { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:6px; margin-bottom:10px; }
   .aslot { display:block; }
+  .album-title { font-weight:bold; font-size:.95rem; color:var(--pink-d); margin:6px 0 2px; }
+  .album-title .zk-count { color:#4fb89a; }
   .tier-water { animation: wobble 1.6s ease-in-out infinite; }
   @keyframes wobble { 0%,100%{ transform: rotate(-7deg);} 50%{ transform: rotate(7deg);} }
   .tier-shaka { position: relative; animation: shaka .25s linear infinite; }
@@ -678,8 +680,20 @@ const ANIMALS = [
   {e:'🦊',n:'きつね'},{e:'🐯',n:'とら'},{e:'🦁',n:'ライオン'},{e:'🐮',n:'うし'},{e:'🐷',n:'ぶた'},
   {e:'🐸',n:'かえる'},{e:'🐵',n:'さる'},{e:'🐔',n:'にわとり'},{e:'🐧',n:'ペンギン'},{e:'🐨',n:'コアラ'},
 ];
+// ボーナス2：モンスターシール 15種（どうぶつ図鑑コンプ後に解放）
+const MONSTERS = [
+  {e:'👾',n:'エイリアン'},{e:'🐉',n:'ドラゴン'},{e:'🦖',n:'ティラノ'},{e:'🦕',n:'きょうりゅう'},{e:'🐲',n:'りゅう'},
+  {e:'👹',n:'おに'},{e:'👺',n:'てんぐ'},{e:'👻',n:'おばけ'},{e:'💀',n:'がいこつ'},{e:'🤖',n:'ロボット'},
+  {e:'🧟',n:'ゾンビ'},{e:'🧛',n:'きゅうけつき'},{e:'🧙',n:'まほうつかい'},{e:'🦑',n:'クラーケン'},{e:'👽',n:'うちゅうじん'},
+];
 function animalHTML(a, silhouette){
   return `<span class="animal-sticker${silhouette?' silhouette':''}"><span class="a-emoji">${silhouette?'❓':a.e}</span></span>`;
+}
+// いま集めている図鑑（どうぶつ→コンプ後モンスター→全部コンプでnull）
+function activeCollection(){
+  if (!game.zukan.every(Boolean))  return { key:'zukan',  list:ANIMALS,  label:'どうぶつ' };
+  if (!game.zukan2.every(Boolean)) return { key:'zukan2', list:MONSTERS, label:'モンスター' };
+  return null;
 }
 
 const TASKS = [
@@ -702,12 +716,13 @@ const TASKS = [
    ========================================================= */
 const SAVE_KEY = 'sealGameSave_v1';
 let game = { name:'', collected:[false,false,false,false], easy:false, muted:false,
-             cleared:false, zukan:new Array(15).fill(false) };
+             cleared:false, zukan:new Array(15).fill(false), zukan2:new Array(15).fill(false) };
 function load(){
   try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.collected) game = s; } catch(e){}
   // 旧セーブとの互換：足りないフィールドを補完
   if (typeof game.cleared !== 'boolean') game.cleared = false;
   if (!Array.isArray(game.zukan) || game.zukan.length !== 15) game.zukan = new Array(15).fill(false);
+  if (!Array.isArray(game.zukan2) || game.zukan2.length !== 15) game.zukan2 = new Array(15).fill(false);
 }
 function save(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(game)); } catch(e){} }
 
@@ -816,19 +831,28 @@ function buildHub(){
     document.getElementById('goCastle').addEventListener('click', startCastle);
   }
 
-  // クリア後の特典：ランダムステージ＋どうぶつシール図鑑
+  // クリア後の特典：ランダムステージ＋シール図鑑（どうぶつ→モンスター）
   const bonusBox = document.getElementById('bonusBox');
   if (game.cleared){
-    const got = game.zukan.filter(Boolean).length;
-    const slots = ANIMALS.map((a,i)=>`<div class="aslot${game.zukan[i]?' filled':''}">${animalHTML(a, !game.zukan[i])}</div>`).join('');
-    const done = got >= ANIMALS.length;
+    const albumHTML = (title, list, owned) => {
+      const got = owned.filter(Boolean).length;
+      const slots = list.map((a,i)=>`<div class="aslot${owned[i]?' filled':''}">${animalHTML(a, !owned[i])}</div>`).join('');
+      return `<div class="album-title">${title} <span class="zk-count">${got}/${list.length}</span></div><div class="zukan">${slots}</div>`;
+    };
+    const animalsDone = game.zukan.every(Boolean);
+    const ac = activeCollection();
+    let html = albumHTML('🐶 どうぶつシール ずかん', ANIMALS, game.zukan);
+    if (animalsDone) html += albumHTML('👾 モンスターシール ずかん', MONSTERS, game.zukan2);
+    const lead = ac
+      ? `あそぶたびに 1まい もらえる（<b>${ac.label}シール</b>・おなじは でない）。コンプリートを めざそう！`
+      : '★ どうぶつも モンスターも ぜんぶ コンプ！おめでとう ★';
     bonusBox.innerHTML = `
       <div class="bonus-head">
-        <h2>🎁 どうぶつシール ずかん <span class="zk-count">${got}/${ANIMALS.length}</span></h2>
-        <button class="btn go" id="goBonus">${done?'もういちど あそぶ':'ランダムステージで GET！'}</button>
+        <h2>🎁 シールずかん</h2>
+        <button class="btn go" id="goBonus">${ac?'ランダムステージで GET！':'もういちど あそぶ'}</button>
       </div>
-      <div class="d" style="opacity:.75; margin:-2px 0 8px;">あそぶたびに 1まい もらえる（おなじ動物は でない）。${done?'★ぜんぶ あつめた！★':'コンプリートを めざそう！'}</div>
-      <div class="zukan">${slots}</div>`;
+      <div class="d" style="opacity:.78; margin:-2px 0 10px;">${lead}</div>
+      ${html}`;
     bonusBox.style.display = 'block';
     document.getElementById('goBonus').addEventListener('click', startBonus);
   } else {
@@ -999,6 +1023,7 @@ if (typeof location !== 'undefined' && location.search.indexOf('test') !== -1){
   window.__sword = () => { if (stage){ stage.swordItem=null; stage.sword.active=true; stage.sword.time=900; swordBtn.classList.remove('hidden'); swordStarStart(); } };
   window.__audio = () => ({ curBgm, bgmOn: !!bgmTimer, muted: game.muted, master: master ? master.gain.value : null, bgmGain: bgmGain ? bgmGain.gain.value : null });
   window.__zukan = () => game.zukan.slice();
+  window.__zukan2 = () => game.zukan2.slice();
   window.__bonus = () => startBonus();
   window.__spec  = () => lastSpec;
   window.__gen   = () => genRandomSpec();
@@ -1367,7 +1392,7 @@ document.querySelectorAll('.key').forEach(btn => {
 /* =========================================================
    ごほうび演出 (シールを貼る)
    ========================================================= */
-let pendingAnimalIdx = null, bonusComplete = false;
+let pendingDraw = null, bonusComplete = false;
 const pasteBtnEl = document.getElementById('pasteBtn');
 
 function showReward(idx){
@@ -1379,27 +1404,33 @@ function showReward(idx){
   pasteBtnEl.textContent = 'シールちょうに はる！';
   document.getElementById('reward').classList.add('show');
 }
-// ボーナス：どうぶつシール獲得（未所持から重複なし抽選）
+// ボーナス：図鑑シール獲得（いま集めている図鑑から、未所持を重複なし抽選）
 function awardAnimal(){
-  const remaining = [];
-  game.zukan.forEach((v,i)=>{ if(!v) remaining.push(i); });
-  if (remaining.length === 0){ showZukanComplete(); return; }
+  const ac = activeCollection();
+  if (!ac){ showZukanComplete(null); return; }   // 全コンプ済み
+  const arr = game[ac.key];
+  const remaining = []; arr.forEach((v,i)=>{ if(!v) remaining.push(i); });
   const idx = remaining[Math.floor(rng()*remaining.length)];
-  const a = ANIMALS[idx];
+  const a = ac.list[idx];
   document.getElementById('rewardEmoji').innerHTML = animalHTML(a, false);
   document.getElementById('rewardName').textContent = a.n + ' の シール';
-  document.getElementById('rewardRate').textContent = 'どうぶつシール';
-  document.getElementById('rewardDesc').textContent = `あたらしい どうぶつ！ ずかんに はろう（${game.zukan.filter(Boolean).length+1}/${ANIMALS.length}）`;
+  document.getElementById('rewardRate').textContent = ac.label + 'シール';
+  document.getElementById('rewardDesc').textContent = `あたらしい ${ac.label}！ ずかんに はろう（${arr.filter(Boolean).length+1}/${ac.list.length}）`;
   pasteBtnEl.textContent = 'ずかんに はる！';
-  pendingAnimalIdx = idx;
+  pendingDraw = { key: ac.key, idx };
   document.getElementById('reward').classList.add('show');
 }
-function showZukanComplete(){
+// which: 'zukan'(どうぶつ完成) / 'zukan2'(モンスター完成=全コンプ) / null(既に全部)
+function showZukanComplete(which){
   confettiBurst(); fanfare();
+  let title, desc;
+  if (which === 'zukan'){ title='どうぶつマスター！'; desc='どうぶつシール コンプ！ つぎは モンスターに ちょうせん！'; }
+  else if (which === 'zukan2'){ title='モンスターマスター！'; desc='どうぶつも モンスターも ぜんぶ コンプ！ さいきょう！'; }
+  else { title='ぜんぶ コンプ ずみ！'; desc='きみは シールマスター！'; }
   document.getElementById('rewardEmoji').innerHTML = '<div style="font-size:3.6rem">🏆</div>';
-  document.getElementById('rewardName').textContent = 'どうぶつマスター！';
-  document.getElementById('rewardRate').textContent = `${ANIMALS.length}/${ANIMALS.length}`;
-  document.getElementById('rewardDesc').textContent = 'どうぶつシールを ぜんぶ あつめた！ すごい！';
+  document.getElementById('rewardName').textContent = title;
+  document.getElementById('rewardRate').textContent = `${game.zukan.filter(Boolean).length+game.zukan2.filter(Boolean).length}/${ANIMALS.length+MONSTERS.length}`;
+  document.getElementById('rewardDesc').textContent = desc;
   pasteBtnEl.textContent = 'やったー！';
   bonusComplete = true;
   document.getElementById('reward').classList.add('show');
@@ -1411,14 +1442,15 @@ document.getElementById('pasteBtn').addEventListener('click', () => {
     document.getElementById('reward').classList.remove('show');
     buildHub(); show('hub'); return;
   }
-  // どうぶつシールを図鑑に貼る
-  if (pendingAnimalIdx != null){
-    const idx = pendingAnimalIdx; pendingAnimalIdx = null;
+  // 図鑑シールを貼る
+  if (pendingDraw != null){
+    const { key, idx } = pendingDraw; pendingDraw = null;
     document.getElementById('reward').classList.remove('show');
     playChime(); burstSparkles();
-    game.zukan[idx] = true; save();
+    game[key][idx] = true; save();
     setTimeout(() => {
-      if (game.zukan.every(Boolean)) showZukanComplete();
+      if (key === 'zukan2' && game.zukan2.every(Boolean)) showZukanComplete('zukan2');
+      else if (key === 'zukan' && game.zukan.every(Boolean)) showZukanComplete('zukan');
       else { buildHub(); show('hub'); }
     }, 700);
     return;
