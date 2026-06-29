@@ -31,13 +31,31 @@
     overflow-x: hidden;            /* 縦スクロールは許可（ステージ2以降に届くように） */
   }
 
-  #muteBtn {
-    position: absolute; top: 8px; right: 8px; z-index: 50;
+  #muteBtn, #saveBtn {
+    position: absolute; top: 8px; z-index: 50;
     width: 38px; height: 38px; border-radius: 50%; border: 2px solid #fff;
     background: rgba(255,255,255,.85); font-size: 1.1rem; cursor: pointer;
     box-shadow: 0 2px 6px rgba(255,93,143,.25); line-height: 1;
   }
-  #muteBtn:active { transform: scale(.92); }
+  #muteBtn { right: 8px; }
+  #saveBtn { right: 52px; }
+  #muteBtn:active, #saveBtn:active { transform: scale(.92); }
+
+  /* ---- セーブパネル ---- */
+  #savePanel { position:absolute; inset:0; display:none; z-index:60; background:rgba(60,48,54,.82);
+    align-items:center; justify-content:center; padding:18px; }
+  #savePanel.show { display:flex; }
+  .save-card { background:#fff; border-radius:20px; border:4px solid var(--mint); padding:18px 16px;
+    max-width:340px; width:100%; max-height:90%; overflow-y:auto; box-shadow:0 12px 30px rgba(0,0,0,.3); }
+  .save-card h2 { font-size:1.15rem; margin-bottom:6px; }
+  .save-card p { font-size:.82rem; opacity:.8; line-height:1.6; margin-bottom:10px; }
+  .save-card textarea { width:100%; height:60px; font-family:monospace; font-size:.7rem; resize:none;
+    border:2px solid #e7d3c9; border-radius:10px; padding:8px; color:var(--ink); }
+  .save-card .row { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 4px; }
+  .save-card .btn { padding:10px 16px; font-size:.92rem; flex:1; min-width:120px; }
+  .save-card .sec-title { font-weight:bold; font-size:.9rem; margin-top:12px; color:var(--pink-d); }
+  .save-msg { font-size:.82rem; font-weight:bold; min-height:1.2em; margin-top:6px; }
+  .save-msg.ok { color:#3aa37a; } .save-msg.ng { color:var(--pink-d); }
 
   #app {
     width: 100%;
@@ -308,6 +326,35 @@
 <body>
 <div id="app">
   <button id="muteBtn" aria-label="おとの オン/オフ">🔊</button>
+  <button id="saveBtn" aria-label="セーブ／バックアップ">💾</button>
+
+  <!-- ===== SAVE PANEL ===== -->
+  <div id="savePanel">
+    <div class="save-card">
+      <h2>💾 セーブ／バックアップ</h2>
+      <p>しんちょくは <b>じどうで ほぞん</b>されているよ。<br>べつの きかい に うつしたい／きえたら こまる ときは、<b>セーブコード</b>を コピーして どこかに ほぞんしてね。</p>
+
+      <div class="sec-title">① いまの セーブコード</div>
+      <textarea id="saveCode" readonly></textarea>
+      <div class="row">
+        <button class="btn mint" id="copyCodeBtn">📋 コピー</button>
+        <button class="btn mint" id="dlFileBtn">⬇ ファイルに ほぞん</button>
+      </div>
+
+      <div class="sec-title">② コードで よみこむ（ふっかつ）</div>
+      <textarea id="loadCode" placeholder="ここに セーブコードを はりつけ"></textarea>
+      <div class="row">
+        <button class="btn" id="loadCodeBtn">よみこむ</button>
+        <button class="btn" id="upFileBtn">⬆ ファイルから</button>
+        <input id="upFileInput" type="file" accept=".txt,application/json" style="display:none">
+      </div>
+      <div class="save-msg" id="saveMsg"></div>
+
+      <div class="row" style="margin-top:12px;">
+        <button class="btn mint" id="saveCloseBtn">とじる</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ===== TITLE ===== -->
   <section id="screen-title" class="screen active">
@@ -750,6 +797,87 @@ document.getElementById('muteBtn').addEventListener('click', (e) => {
   game.muted = !game.muted;
   save();
   applyMute();
+});
+
+/* =========================================================
+   セーブ／バックアップ（コード書き出し・読み込み・ファイル）
+   ========================================================= */
+function encodeSave(){
+  // 日本語OKな base64（接頭辞 SEAL1- 付き）
+  return 'SEAL1-' + btoa(unescape(encodeURIComponent(JSON.stringify(game))));
+}
+function decodeSave(code){
+  let c = (code || '').trim();
+  if (c.startsWith('SEAL1-')) c = c.slice(6);
+  const obj = JSON.parse(decodeURIComponent(escape(atob(c))));
+  if (!obj || !Array.isArray(obj.collected)) throw new Error('bad');
+  return obj;
+}
+function saveMsg(text, ok){
+  const m = document.getElementById('saveMsg');
+  m.textContent = text; m.className = 'save-msg ' + (ok ? 'ok' : 'ng');
+}
+function openSavePanel(){
+  document.getElementById('saveCode').value = encodeSave();
+  document.getElementById('loadCode').value = '';
+  saveMsg('', true);
+  document.getElementById('savePanel').classList.add('show');
+}
+document.getElementById('saveBtn').addEventListener('click', (e)=>{ e.stopPropagation(); openSavePanel(); });
+document.getElementById('saveCloseBtn').addEventListener('click', ()=> document.getElementById('savePanel').classList.remove('show'));
+document.getElementById('copyCodeBtn').addEventListener('click', async ()=>{
+  const code = document.getElementById('saveCode').value;
+  try { await navigator.clipboard.writeText(code); saveMsg('コピーしたよ！ どこかに ほぞんしてね', true); }
+  catch(e){ // フォールバック：選択
+    const ta = document.getElementById('saveCode'); ta.focus(); ta.select();
+    try { document.execCommand('copy'); saveMsg('コピーしたよ！', true); }
+    catch(_){ saveMsg('コードを ながおしして コピーしてね', false); }
+  }
+});
+function applyLoadedSave(obj){
+  game = obj;
+  // 正規化（古い/壊れたコードでも安全に）
+  if (!Array.isArray(game.collected) || game.collected.length !== 4) game.collected = [false,false,false,false];
+  if (typeof game.easy !== 'boolean') game.easy = false;
+  if (typeof game.muted !== 'boolean') game.muted = false;
+  if (typeof game.cleared !== 'boolean') game.cleared = false;
+  if (!Array.isArray(game.zukan) || game.zukan.length !== 15) game.zukan = new Array(15).fill(false);
+  if (!Array.isArray(game.zukan2) || game.zukan2.length !== 15) game.zukan2 = new Array(15).fill(false);
+  if (typeof game.name !== 'string') game.name = '';
+  save();
+  if (nameInput) nameInput.value = game.name || '';
+  applyMute();
+  buildHub();
+}
+document.getElementById('loadCodeBtn').addEventListener('click', ()=>{
+  try {
+    const obj = decodeSave(document.getElementById('loadCode').value);
+    applyLoadedSave(obj);
+    saveMsg('よみこみ せいこう！ しんちょくを ふっかつしたよ✨', true);
+    setTimeout(()=>{ document.getElementById('savePanel').classList.remove('show'); buildHub(); show('hub'); }, 900);
+  } catch(e){ saveMsg('コードが ただしくないみたい…もういちど かくにんしてね', false); }
+});
+document.getElementById('dlFileBtn').addEventListener('click', ()=>{
+  const blob = new Blob([encodeSave()], { type:'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'seal-game-save.txt';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  saveMsg('ファイルに ほぞんしたよ！', true);
+});
+document.getElementById('upFileBtn').addEventListener('click', ()=> document.getElementById('upFileInput').click());
+document.getElementById('upFileInput').addEventListener('change', (e)=>{
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    try { applyLoadedSave(decodeSave(String(r.result)));
+      saveMsg('ファイルから ふっかつしたよ✨', true);
+      setTimeout(()=>{ document.getElementById('savePanel').classList.remove('show'); buildHub(); show('hub'); }, 900);
+    } catch(err){ saveMsg('ファイルが よめなかった…', false); }
+  };
+  r.readAsText(f);
+  e.target.value = '';
 });
 
 document.getElementById('startBtn').addEventListener('click', () => {
