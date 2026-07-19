@@ -327,6 +327,43 @@
     .task { padding: 10px 12px; gap: 10px; }
     .task .ico { font-size: 1.5rem; width: 32px; }
   }
+
+  /* ===== ドラッグ＆ドロップ貼り付け ===== */
+  #paste-zone {
+    display: none; position: absolute; bottom: 0; left: 0; right: 0;
+    height: 42%; z-index: 450;
+    flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    background: linear-gradient(to top, rgba(255,240,245,0.97) 75%, transparent);
+    pointer-events: none;
+  }
+  #paste-zone.show { display: flex; animation: slideUp .25s ease; }
+  #paste-zone.over #paper-slot { background: #fff0f5; border-color: var(--pink-d); transform: scale(1.1); }
+  #paper-slot {
+    width: 115px; height: 115px; border-radius: 16px;
+    border: 3px dashed var(--pink); background: #fffaf8;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 56px; transition: all .15s ease;
+    box-shadow: 0 4px 20px rgba(255,143,177,.35);
+    pointer-events: all;
+  }
+  .paste-hint {
+    font-size: .95rem; color: var(--pink-d); font-weight: bold;
+    animation: pzBounce .6s ease infinite alternate;
+    text-shadow: 0 1px 3px rgba(255,93,143,.2);
+  }
+  #drag-ghost {
+    display: none; position: fixed; pointer-events: none; z-index: 500;
+    transform: translate(-50%, -50%) scale(1.18);
+    filter: drop-shadow(0 6px 18px rgba(0,0,0,.3));
+  }
+  #drag-ghost .sticker-img { width: 70px; height: 70px; }
+  #drag-ghost .animal-sticker { width: 70px; height: 70px; }
+  #drag-ghost .animal-sticker .a-emoji { font-size: 2.8rem; }
+  #drag-ghost.snap { transition: left .22s cubic-bezier(.2,.8,.3,1.2), top .22s cubic-bezier(.2,.8,.3,1.2), transform .22s; transform: translate(-50%,-50%) scale(1); }
+  @keyframes slideUp  { from { transform: translateY(60%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes pzBounce { from { transform: translateY(0); } to { transform: translateY(-6px); } }
+  .reward-card { cursor: grab; }
+  .reward-card:active { cursor: grabbing; }
 </style>
 </head>
 <body>
@@ -451,6 +488,13 @@
       <button class="btn mint" id="pasteBtn">シールちょうに はる！</button>
     </div>
   </div>
+
+  <!-- ドラッグ＆ドロップ 貼り付けゾーン -->
+  <div id="paste-zone">
+    <p class="paste-hint">⬇ ここに おとして はろう！</p>
+    <div id="paper-slot"></div>
+  </div>
+  <div id="drag-ghost"></div>
 
   <!-- ===== RETRY (game over) ===== -->
   <div id="retry">
@@ -1481,6 +1525,14 @@ function drawStage(){
    ========================================================= */
 // 左右=←→/A D、ジャンプ=Space/↑/W、にんじん=Z/J、けん=X/K（親切な複数バインド）
 window.addEventListener('keydown', (e) => {
+  // Space / Enter で シールを貼る（#reward 表示中はゲームキーを無効化）
+  if (document.getElementById('reward').classList.contains('show')) {
+    if (e.code === 'Space' || e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('pasteBtn').click();
+    }
+    return;
+  }
   const k = e.key.toLowerCase();
   if (['arrowleft','arrowright','arrowup','arrowdown',' '].includes(k) || e.code==='Space') e.preventDefault();
   if (e.repeat) return;
@@ -1570,6 +1622,9 @@ function showZukanComplete(which){
   document.getElementById('reward').classList.add('show');
 }
 document.getElementById('pasteBtn').addEventListener('click', () => {
+  // ドラッグ中の後始末（ボタン直接タップ時にゾーンが残らないように）
+  document.getElementById('paste-zone').classList.remove('show','over');
+  document.getElementById('drag-ghost').style.display = 'none';
   // 図鑑コンプ祝いを閉じる
   if (bonusComplete){
     bonusComplete = false;
@@ -1605,6 +1660,74 @@ document.getElementById('pasteBtn').addEventListener('click', () => {
     }
   }, 700);
 });
+
+/* ---- ドラッグ＆ドロップ 貼り付け ---- */
+(function(){
+  let drag = null;
+  const ghostEl   = document.getElementById('drag-ghost');
+  const pasteZone = document.getElementById('paste-zone');
+  const paperSlot = document.getElementById('paper-slot');
+  const rewardEl  = document.getElementById('reward');
+
+  function getDragContent(){
+    return document.getElementById('rewardEmoji').innerHTML;
+  }
+
+  function startDragListen(e){
+    if (!rewardEl.classList.contains('show')) return;
+    const pt = e.touches ? e.touches[0] : e;
+    drag = { startX: pt.clientX, startY: pt.clientY, active: false };
+  }
+
+  function moveDrag(e){
+    if (!drag) return;
+    const pt = e.touches ? e.touches[0] : e;
+    const dx = pt.clientX - drag.startX, dy = pt.clientY - drag.startY;
+    if (!drag.active && Math.hypot(dx, dy) < 10) return;
+    if (!drag.active){
+      drag.active = true;
+      ghostEl.innerHTML = getDragContent();
+      ghostEl.style.display = 'block';
+      ghostEl.classList.remove('snap');
+      pasteZone.classList.add('show');
+    }
+    ghostEl.style.left = pt.clientX + 'px';
+    ghostEl.style.top  = pt.clientY + 'px';
+    const zr = pasteZone.getBoundingClientRect();
+    pasteZone.classList.toggle('over', pt.clientY > zr.top + 20);
+    if (e.cancelable) e.preventDefault();
+  }
+
+  function endDrag(e){
+    if (!drag || !drag.active){ drag = null; return; }
+    const pt = e.changedTouches ? e.changedTouches[0] : e;
+    const zr = pasteZone.getBoundingClientRect();
+    const onZone = pt.clientY > zr.top + 20;
+    if (onZone){
+      // 貼り付け成功 — ゴーストをスロット中心へスナップ → pasteBtn 実行
+      const sr = paperSlot.getBoundingClientRect();
+      ghostEl.classList.add('snap');
+      ghostEl.style.left = (sr.left + sr.width  / 2) + 'px';
+      ghostEl.style.top  = (sr.top  + sr.height / 2) + 'px';
+      pasteZone.classList.remove('over');
+      drag = null;
+      setTimeout(() => document.getElementById('pasteBtn').click(), 220);
+    } else {
+      // キャンセル
+      ghostEl.style.display = 'none';
+      pasteZone.classList.remove('show', 'over');
+      drag = null;
+    }
+  }
+
+  const rewardCard = document.querySelector('.reward-card');
+  rewardCard.addEventListener('mousedown',  startDragListen);
+  rewardCard.addEventListener('touchstart', startDragListen, { passive: true });
+  window.addEventListener('mousemove', moveDrag);
+  window.addEventListener('touchmove', moveDrag, { passive: false });
+  window.addEventListener('mouseup',   endDrag);
+  window.addEventListener('touchend',  endDrag);
+})();
 
 function burstSparkles(){
   const app = document.getElementById('app');
