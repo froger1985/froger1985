@@ -364,6 +364,64 @@
   @keyframes pzBounce { from { transform: translateY(0); } to { transform: translateY(-6px); } }
   .reward-card { cursor: grab; }
   .reward-card:active { cursor: grabbing; }
+
+  /* ===== 透明自由帳（アルバムページ） ===== */
+  #album-page {
+    position: relative; width: 100%; height: 220px;
+    background: rgba(255,255,255,0.10);
+    backdrop-filter: blur(2px);
+    border: 2px solid rgba(255,143,177,0.22);
+    border-radius: 20px; margin-bottom: 16px; overflow: hidden;
+  }
+  #album-page:empty::before {
+    content: '🐰 ここに シールを ひっぱって はろう！';
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,143,177,0.4); font-size: .82rem; text-align: center; padding: 12px;
+  }
+  .placed-sticker {
+    position: absolute; transform-origin: center;
+    pointer-events: none; user-select: none;
+    animation: stickerDrop .3s cubic-bezier(.2,.8,.3,1.2);
+  }
+  .placed-sticker .sticker { font-size: 1.7rem; }
+  .placed-sticker .sticker-img { width: 46px; height: 46px; }
+  .placed-sticker .animal-sticker { width: 44px; height: 44px; }
+  .placed-sticker .animal-sticker .a-emoji { font-size: 1.6rem; }
+  @keyframes stickerDrop { from { transform: translate(-50%,-50%) scale(0.5); opacity:0; } to { opacity:1; } }
+
+  /* ===== 台紙リワードオーバーレイ ===== */
+  #sheet-reward {
+    position: absolute; inset: 0; z-index: 550;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(255,240,245,0.96);
+  }
+  #sheet-reward.show { display: flex; animation: pop .4s ease; }
+  #sheet-reward.dragging { background: rgba(255,240,245,0.30); backdrop-filter: blur(6px); }
+  .sheet-paper {
+    border-radius: 20px; padding: 18px 20px 16px;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    max-width: 300px; width: 90%;
+    box-shadow: 0 8px 32px rgba(0,0,0,.18), inset 0 0 0 2px rgba(255,255,255,.6);
+  }
+  .sheet-title { font-size: 1rem; font-weight: bold; color: #5a4a52; }
+  .sheet-sub { font-size: .82rem; color: rgba(90,74,82,.65); }
+  .sheet-stickers-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .sheet-sticker-item {
+    width: 58px; height: 58px; border-radius: 14px;
+    background: rgba(255,255,255,0.75);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    cursor: grab; touch-action: none;
+    transition: opacity .2s, transform .15s;
+  }
+  .sheet-sticker-item .sticker { font-size: 2rem; }
+  .sheet-sticker-item .sticker-img { width: 42px; height: 42px; }
+  .sheet-sticker-item .animal-sticker { width: 42px; height: 42px; }
+  .sheet-sticker-item .animal-sticker .a-emoji { font-size: 1.8rem; }
+  .sheet-sticker-item.placed { opacity: 0.25; pointer-events: none; transform: scale(0.88); }
+  .sheet-sticker-item:not(.placed):active { transform: scale(1.12); }
 </style>
 </head>
 <body>
@@ -433,7 +491,7 @@
       ミッションを えらんで、レアなシールを ゲットしよう！
     </div>
 
-    <div class="book" id="book"></div>
+    <div id="album-page"></div>
 
     <div id="diffSelect" class="diff">
       <span class="diff-label">なんいど：</span>
@@ -495,6 +553,18 @@
     <div id="paper-slot"></div>
   </div>
   <div id="drag-ghost"></div>
+
+  <!-- ===== SHEET REWARD OVERLAY ===== -->
+  <div id="sheet-reward">
+    <div class="sheet-paper" id="sheetPaper">
+      <p class="sheet-title" id="sheetTitle">🎉 だいし GET！</p>
+      <div class="sheet-stickers-row" id="sheetStickersRow"></div>
+      <p class="sheet-sub">シールを ひっぱって はろう！</p>
+      <div style="display:flex; gap:10px; margin-top:6px;">
+        <button class="btn mint" id="sheetPasteAllBtn">ぜんぶ いっきに はろう</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ===== RETRY (game over) ===== -->
   <div id="retry">
@@ -786,6 +856,17 @@ const MONSTERS = [
 function animalHTML(a, silhouette){
   return `<span class="animal-sticker${silhouette?' silhouette':''}"><span class="a-emoji">${silhouette?'❓':a.e}</span></span>`;
 }
+const SHEETS = [
+  { id:0, bg:'#ffefd5', accent:'#ffb347', title:'🏃 アスレチック クリア！',
+    stickers:[{type:'main',id:0},{type:'animal',id:0},{type:'emoji',e:'🌟'},{type:'emoji',e:'🌈'},{type:'emoji',e:'🎉'}] },
+  { id:1, bg:'#ffe4e1', accent:'#ff6b6b', title:'🦁 ライオン たおした！',
+    stickers:[{type:'main',id:1},{type:'animal',id:7},{type:'emoji',e:'🔥'},{type:'emoji',e:'⭐'},{type:'emoji',e:'💪'}] },
+  { id:2, bg:'#e8f4fd', accent:'#74b9ff', title:'🧗 でこぼこ クリア！',
+    stickers:[{type:'main',id:2},{type:'animal',id:2},{type:'emoji',e:'✨'},{type:'emoji',e:'🦋'},{type:'emoji',e:'🌸'}] },
+  { id:3, bg:'#fff9e6', accent:'#f9ca24', title:'👑 ボス たおした！',
+    stickers:[{type:'main',id:3},{type:'animal',id:3},{type:'emoji',e:'👑'},{type:'emoji',e:'💫'},{type:'emoji',e:'🏆'}] },
+];
+
 // いま集めている図鑑（どうぶつ→コンプ後モンスター→全部コンプでnull）
 function activeCollection(){
   if (!game.zukan.every(Boolean))  return { key:'zukan',  list:ANIMALS,  label:'どうぶつ' };
@@ -812,7 +893,9 @@ const TASKS = [
    セーブ
    ========================================================= */
 const SAVE_KEY = 'sealGameSave_v1';
-let game = { name:'', collected:[false,false,false,false], easy:false, muted:false,
+let game = { name:'', collected:[false,false,false,false],
+             sheetsGot:[false,false,false,false], album:[],
+             easy:false, muted:false,
              cleared:false, zukan:new Array(15).fill(false), zukan2:new Array(15).fill(false) };
 function load(){
   try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.collected) game = s; } catch(e){}
@@ -820,6 +903,9 @@ function load(){
   if (typeof game.cleared !== 'boolean') game.cleared = false;
   if (!Array.isArray(game.zukan) || game.zukan.length !== 15) game.zukan = new Array(15).fill(false);
   if (!Array.isArray(game.zukan2) || game.zukan2.length !== 15) game.zukan2 = new Array(15).fill(false);
+  if (!Array.isArray(game.sheetsGot) || game.sheetsGot.length !== 4)
+    game.sheetsGot = Array.isArray(game.collected) ? [...game.collected] : [false,false,false,false];
+  if (!Array.isArray(game.album)) game.album = [];
 }
 function save(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(game)); } catch(e){} }
 
@@ -893,6 +979,9 @@ function applyLoadedSave(obj){
   if (typeof game.cleared !== 'boolean') game.cleared = false;
   if (!Array.isArray(game.zukan) || game.zukan.length !== 15) game.zukan = new Array(15).fill(false);
   if (!Array.isArray(game.zukan2) || game.zukan2.length !== 15) game.zukan2 = new Array(15).fill(false);
+  if (!Array.isArray(game.sheetsGot) || game.sheetsGot.length !== 4)
+    game.sheetsGot = Array.isArray(game.collected) ? [...game.collected] : [false,false,false,false];
+  if (!Array.isArray(game.album)) game.album = [];
   if (typeof game.name !== 'string') game.name = '';
   save();
   if (nameInput) nameInput.value = game.name || '';
@@ -940,35 +1029,164 @@ document.getElementById('startBtn').addEventListener('click', () => {
 });
 
 /* =========================================================
+   透明自由帳（アルバムページ）
+   ========================================================= */
+function stickerItemHTML(item){
+  if (item.type === 'main')   return stickerHTML(STICKERS[item.id], false);
+  if (item.type === 'animal') return animalHTML(ANIMALS[item.id], false);
+  if (item.type === 'monster') return animalHTML(MONSTERS[item.id], false);
+  return `<span class="sticker">${item.e}</span>`;
+}
+
+function renderAlbum(){
+  const page = document.getElementById('album-page');
+  if (!page) return;
+  page.innerHTML = '';
+  game.album.forEach(item => {
+    const el = document.createElement('div');
+    el.className = 'placed-sticker';
+    el.style.left = item.x + '%';
+    el.style.top  = item.y + '%';
+    el.style.transform = `translate(-50%,-50%) rotate(${item.rot}deg)`;
+    el.innerHTML = stickerItemHTML(item);
+    page.appendChild(el);
+  });
+}
+
+function placeOnAlbum(item, xPct, yPct){
+  const rot = (Math.random() * 24 - 12) | 0;
+  game.album.push({ ...item, x: xPct, y: yPct, rot });
+  save();
+  renderAlbum();
+}
+
+function onSheetDone(sheetIdx){
+  const sheetEl = document.getElementById('sheet-reward');
+  if (sheetEl._cleanup){ sheetEl._cleanup(); sheetEl._cleanup = null; }
+  sheetEl.classList.remove('show', 'dragging');
+  playChime(); burstSparkles();
+  game.sheetsGot[sheetIdx] = true; save();
+  setTimeout(() => {
+    if (game.sheetsGot.every(Boolean)) startCastle();
+    else { buildHub(); show('hub'); }
+  }, 700);
+}
+
+function setupSheetDrag(sheetIdx){
+  const sheetEl = document.getElementById('sheet-reward');
+  const albumPage = document.getElementById('album-page');
+  const row = document.getElementById('sheetStickersRow');
+  const ghostEl = document.getElementById('drag-ghost');
+  const sheet = SHEETS[sheetIdx];
+  let sheetDrag = null;
+
+  function sheetMoveDrag(e){
+    if (!sheetDrag) return;
+    e.preventDefault();
+    const dx = e.clientX - sheetDrag.startX, dy = e.clientY - sheetDrag.startY;
+    if (!sheetDrag.active && Math.hypot(dx, dy) < 8) return;
+    if (!sheetDrag.active){
+      sheetDrag.active = true;
+      ghostEl.innerHTML = stickerItemHTML(sheetDrag.item);
+      ghostEl.style.display = 'block';
+      ghostEl.classList.remove('snap');
+      sheetEl.classList.add('dragging');
+    }
+    ghostEl.style.left = e.clientX + 'px';
+    ghostEl.style.top  = e.clientY + 'px';
+  }
+
+  function sheetEndDrag(e){
+    if (!sheetDrag || !sheetDrag.active){ sheetDrag = null; return; }
+    const ar = albumPage.getBoundingClientRect();
+    ghostEl.style.display = 'none';
+    sheetEl.classList.remove('dragging');
+    const onAlbum = e.clientX >= ar.left && e.clientX <= ar.right &&
+                    e.clientY >= ar.top  && e.clientY <= ar.bottom;
+    if (onAlbum){
+      const xPct = parseFloat(((e.clientX - ar.left) / ar.width  * 100).toFixed(1));
+      const yPct = parseFloat(((e.clientY - ar.top)  / ar.height * 100).toFixed(1));
+      const { itemEl, item } = sheetDrag;
+      sheetDrag = null;
+      itemEl.classList.add('placed');
+      placeOnAlbum(item, xPct, yPct);
+      playChime();
+      if (row.querySelectorAll('.sheet-sticker-item:not(.placed)').length === 0)
+        setTimeout(() => onSheetDone(sheetIdx), 300);
+    } else {
+      sheetDrag = null;
+    }
+  }
+
+  row.querySelectorAll('.sheet-sticker-item').forEach((itemEl, i) => {
+    const item = sheet.stickers[i];
+    itemEl.addEventListener('pointerdown', (e) => {
+      if (itemEl.classList.contains('placed')) return;
+      e.preventDefault();
+      sheetDrag = { itemEl, item, active: false, startX: e.clientX, startY: e.clientY };
+    });
+  });
+
+  window.addEventListener('pointermove', sheetMoveDrag);
+  window.addEventListener('pointerup',   sheetEndDrag);
+
+  sheetEl._cleanup = () => {
+    window.removeEventListener('pointermove', sheetMoveDrag);
+    window.removeEventListener('pointerup',   sheetEndDrag);
+  };
+
+  document.getElementById('sheetPasteAllBtn').onclick = () => {
+    if (sheetEl._cleanup){ sheetEl._cleanup(); sheetEl._cleanup = null; }
+    ghostEl.style.display = 'none';
+    const unplaced = Array.from(row.querySelectorAll('.sheet-sticker-item:not(.placed)'));
+    unplaced.forEach((itemEl) => {
+      const i = parseInt(itemEl.dataset.idx, 10);
+      const item = sheet.stickers[i];
+      const xPct = parseFloat((10 + Math.random() * 80).toFixed(1));
+      const yPct = parseFloat((10 + Math.random() * 80).toFixed(1));
+      itemEl.classList.add('placed');
+      placeOnAlbum(item, xPct, yPct);
+    });
+    setTimeout(() => onSheetDone(sheetIdx), 400);
+  };
+}
+
+function showSheet(sheetIdx){
+  const sheet = SHEETS[sheetIdx];
+  buildHub(); show('hub');
+  const paper = document.getElementById('sheetPaper');
+  paper.style.background = sheet.bg;
+  document.getElementById('sheetTitle').textContent = sheet.title;
+  const row = document.getElementById('sheetStickersRow');
+  row.innerHTML = '';
+  sheet.stickers.forEach((item, i) => {
+    const el = document.createElement('div');
+    el.className = 'sheet-sticker-item';
+    el.dataset.idx = i;
+    el.innerHTML = stickerItemHTML(item);
+    row.appendChild(el);
+  });
+  document.getElementById('sheet-reward').classList.add('show');
+  setupSheetDrag(sheetIdx);
+}
+
+/* =========================================================
    ハブ / シール帳
    ========================================================= */
 function buildHub(){
   document.getElementById('hubTitle').textContent = `🐰 ${game.name}の シールちょう`;
   document.getElementById('speechName').textContent = game.name;
 
-  // book
-  const book = document.getElementById('book');
-  book.innerHTML = '';
-  STICKERS.forEach((s, i) => {
-    const slot = document.createElement('div');
-    slot.className = 'slot';
-    if (game.collected[i]) {
-      slot.classList.add('filled');
-      if (s.tier === 'bondoro') slot.classList.add('bondoro');
-      slot.innerHTML = stickerHTML(s, false) + `<span class="rate">${s.rate}</span>`;
-    } else {
-      slot.innerHTML = stickerHTML(s, true);
-    }
-    book.appendChild(slot);
-  });
+  // 透明自由帳
+  renderAlbum();
 
   // tasks
   const list = document.getElementById('taskList');
   list.innerHTML = '';
   TASKS.forEach((task) => {
-    const done = game.collected[task.reward];
+    const done = game.sheetsGot[task.reward];
     // 順番に解放: ひとつ前のミッションをクリアしていないとロック
-    const locked = task.id > 0 && !game.collected[TASKS[task.id - 1].reward];
+    const locked = task.id > 0 && !game.sheetsGot[TASKS[task.id - 1].reward];
     const el = document.createElement('div');
     el.className = 'task' + (done ? ' done' : '') + (locked ? ' locked' : '');
     const st = STICKERS[task.reward];
@@ -991,10 +1209,10 @@ function buildHub(){
     b.addEventListener('click', () => startTask(parseInt(b.dataset.task, 10)));
   });
 
-  document.getElementById('progressNum').textContent = game.collected.filter(Boolean).length;
+  document.getElementById('progressNum').textContent = game.sheetsGot.filter(Boolean).length;
 
-  // 全シール収集 → 「さいごの試練：お城へ」を案内
-  if (game.collected.every(Boolean)){
+  // 全台紙獲得 → 「さいごの試練：お城へ」を案内
+  if (game.sheetsGot.every(Boolean)){
     const banner = document.createElement('div');
     banner.className = 'task';
     banner.style.borderColor = 'var(--yellow)';
@@ -1304,7 +1522,7 @@ function winStage(){
   stage.sword.active = false;
   if (stage.isCastle){ sfxClear(); setTimeout(() => startCutscene(), 500); }
   else if (stage.isBonus){ sfxClear(); setTimeout(() => awardAnimal(), 350); }
-  else { sfxClear(); setTimeout(() => showReward(curTask.reward), 350); }
+  else { sfxClear(); setTimeout(() => showSheet(curTask.reward), 350); }
 }
 
 function killEnemy(e){ e.dead = true; stage.defeated++; addParts(e.x, e.y); }
@@ -1644,21 +1862,6 @@ document.getElementById('pasteBtn').addEventListener('click', () => {
     }, 700);
     return;
   }
-  // 通常のシール（メイン4種）
-  const idx = curTask.reward;
-  document.getElementById('reward').classList.remove('show');
-  playChime();              // 🔊 トゥルン、トゥルルルン！
-  burstSparkles();
-  game.collected[idx] = true;
-  save();
-  setTimeout(() => {
-    if (game.collected.every(Boolean)){
-      startCastle();              // 4枚そろったら そのまま「さいごの試練：お城へ」
-    } else {
-      buildHub();
-      show('hub');
-    }
-  }, 700);
 });
 
 /* ---- ドラッグ＆ドロップ 貼り付け ---- */
@@ -1836,7 +2039,8 @@ function confettiBurst(){
   }
 }
 document.getElementById('endBtn').addEventListener('click', () => {
-  game.collected = [false,false,false,false];
+  game.collected  = [false,false,false,false];
+  game.sheetsGot  = [false,false,false,false];
   save();
   document.getElementById('ending').classList.remove('show');
   show('title');
