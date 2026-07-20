@@ -365,19 +365,35 @@
   .reward-card { cursor: grab; }
   .reward-card:active { cursor: grabbing; }
 
-  /* ===== 透明自由帳（アルバムページ） ===== */
+  /* ===== かわいいシールちょう ===== */
+  .album-wrap {
+    position: relative; margin-bottom: 20px;
+  }
+  .album-corner {
+    position: absolute; z-index: 3; pointer-events: none; font-size: 20px; line-height: 1;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.15));
+  }
+  .album-corner.c1 { top: -10px; left:  2px; transform: rotate(-18deg); }
+  .album-corner.c2 { top: -10px; right: 2px; transform: rotate( 18deg); }
+  .album-corner.c3 { bottom: -10px; left:  6px; transform: rotate(12deg); }
+  .album-corner.c4 { bottom: -10px; right: 6px; transform: rotate(-12deg); }
   #album-page {
-    position: relative; width: 100%; height: 220px;
-    background: rgba(255,255,255,0.10);
-    backdrop-filter: blur(2px);
-    border: 2px solid rgba(255,143,177,0.22);
-    border-radius: 20px; margin-bottom: 16px; overflow: hidden;
+    position: relative; width: 100%; height: 230px;
+    background:
+      radial-gradient(circle, rgba(255,180,215,.28) 1.5px, transparent 1.5px) 0 0 / 20px 20px,
+      linear-gradient(145deg, #fff4f9 0%, #fffef2 50%, #f4f0ff 100%);
+    border-radius: 18px; overflow: hidden;
+    box-shadow:
+      0 0 0 3px #ffb6d9,
+      0 0 0 7px #ffe4f2,
+      0 6px 18px rgba(255,143,177,.22);
   }
   #album-page:empty::before {
-    content: '🐰 ここに シールを ひっぱって はろう！';
+    content: '✨ シールを したから ひっぱって はろう！';
     position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
-    color: rgba(255,143,177,0.4); font-size: .82rem; text-align: center; padding: 12px;
+    color: rgba(255,143,177,0.45); font-size: .8rem; text-align: center; padding: 12px;
+    pointer-events: none;
   }
   .placed-sticker {
     position: absolute; transform-origin: center;
@@ -389,31 +405,33 @@
   .placed-sticker .sticker-img { width: 46px; height: 46px; }
   .placed-sticker .animal-sticker { width: 44px; height: 44px; }
   .placed-sticker .animal-sticker .a-emoji { font-size: 1.6rem; }
-  @keyframes stickerDrop { from { transform: translate(-50%,-50%) scale(0.5); opacity:0; } to { opacity:1; } }
+  @keyframes stickerDrop { from { transform: translate(-50%,-50%) scale(0.4) rotate(var(--r,0deg)); opacity:0; } to { opacity:1; } }
 
-  /* ===== 台紙リワードオーバーレイ ===== */
+  /* ===== 台紙リワード — 下から出るドロワー ===== */
   #sheet-reward {
-    position: absolute; inset: 0; z-index: 550;
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 550;
     display: none; flex-direction: column;
-    align-items: center; justify-content: center;
-    background: rgba(255,240,245,0.96);
+    align-items: stretch;
+    pointer-events: none;
   }
-  #sheet-reward.show { display: flex; animation: pop .4s ease; }
-  #sheet-reward.dragging { background: rgba(255,240,245,0.30); backdrop-filter: blur(6px); }
+  #sheet-reward.show { display: flex; }
   .sheet-paper {
-    border-radius: 20px; padding: 18px 20px 16px;
-    display: flex; flex-direction: column; align-items: center; gap: 12px;
-    max-width: 300px; width: 90%;
-    box-shadow: 0 8px 32px rgba(0,0,0,.18), inset 0 0 0 2px rgba(255,255,255,.6);
+    pointer-events: auto;
+    border-radius: 26px 26px 0 0;
+    padding: 14px 16px 22px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    background: linear-gradient(180deg, #fff0f7 0%, #fffbfe 100%);
+    box-shadow: 0 -5px 28px rgba(255,143,177,.28), 0 -1px 0 #ffcce6;
+    animation: slideUp .3s cubic-bezier(.2,.8,.4,1);
   }
-  .sheet-title { font-size: 1rem; font-weight: bold; color: #5a4a52; }
-  .sheet-sub { font-size: .82rem; color: rgba(90,74,82,.65); }
+  .sheet-title { font-size: 1rem; font-weight: bold; color: #c2567a; }
+  .sheet-sub { font-size: .78rem; color: rgba(160,80,110,.7); }
   .sheet-stickers-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
   .sheet-sticker-item {
-    width: 58px; height: 58px; border-radius: 14px;
-    background: rgba(255,255,255,0.75);
+    width: 60px; height: 60px; border-radius: 16px;
+    background: #fff;
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    box-shadow: 0 2px 10px rgba(255,143,177,.25), 0 0 0 2px #ffe0ee;
     cursor: grab; touch-action: none;
     transition: opacity .2s, transform .15s;
   }
@@ -421,8 +439,8 @@
   .sheet-sticker-item .sticker-img { width: 42px; height: 42px; }
   .sheet-sticker-item .animal-sticker { width: 42px; height: 42px; }
   .sheet-sticker-item .animal-sticker .a-emoji { font-size: 1.8rem; }
-  .sheet-sticker-item.placed { opacity: 0.25; pointer-events: none; transform: scale(0.88); }
-  .sheet-sticker-item:not(.placed):active { transform: scale(1.12); }
+  .sheet-sticker-item.placed { opacity: 0.2; pointer-events: none; transform: scale(0.85); }
+  .sheet-sticker-item:not(.placed):active { transform: scale(1.14); }
 </style>
 </head>
 <body>
@@ -492,7 +510,13 @@
       ミッションを えらんで、レアなシールを ゲットしよう！
     </div>
 
-    <div id="album-page"></div>
+    <div class="album-wrap">
+      <span class="album-corner c1">⭐</span>
+      <span class="album-corner c2">🌸</span>
+      <span class="album-corner c3">💫</span>
+      <span class="album-corner c4">🦋</span>
+      <div id="album-page"></div>
+    </div>
 
     <div id="diffSelect" class="diff">
       <span class="diff-label">なんいど：</span>
@@ -559,11 +583,9 @@
   <div id="sheet-reward">
     <div class="sheet-paper" id="sheetPaper">
       <p class="sheet-title" id="sheetTitle">🎉 だいし GET！</p>
+      <p class="sheet-sub">シールを うえの シールちょうに ひっぱって はろう！</p>
       <div class="sheet-stickers-row" id="sheetStickersRow"></div>
-      <p class="sheet-sub">シールを ひっぱって はろう！</p>
-      <div style="display:flex; gap:10px; margin-top:6px;">
-        <button class="btn mint" id="sheetPasteAllBtn">ぜんぶ いっきに はろう</button>
-      </div>
+      <button class="btn mint" id="sheetPasteAllBtn" style="margin-top:4px;">ぜんぶ いっきに はろう</button>
     </div>
   </div>
 
