@@ -381,9 +381,10 @@
   }
   .placed-sticker {
     position: absolute; transform-origin: center;
-    pointer-events: none; user-select: none;
+    pointer-events: auto; user-select: none; cursor: grab; touch-action: none;
     animation: stickerDrop .3s cubic-bezier(.2,.8,.3,1.2);
   }
+  .placed-sticker.dragging-src { opacity: 0.35; cursor: grabbing; }
   .placed-sticker .sticker { font-size: 1.7rem; }
   .placed-sticker .sticker-img { width: 46px; height: 46px; }
   .placed-sticker .animal-sticker { width: 44px; height: 44px; }
@@ -1042,7 +1043,7 @@ function renderAlbum(){
   const page = document.getElementById('album-page');
   if (!page) return;
   page.innerHTML = '';
-  game.album.forEach(item => {
+  game.album.forEach((item, idx) => {
     const el = document.createElement('div');
     el.className = 'placed-sticker';
     el.style.left = item.x + '%';
@@ -1050,6 +1051,50 @@ function renderAlbum(){
     el.style.transform = `translate(-50%,-50%) rotate(${item.rot}deg)`;
     el.innerHTML = stickerItemHTML(item);
     page.appendChild(el);
+    attachAlbumDrag(el, idx, page);
+  });
+}
+
+function attachAlbumDrag(el, idx, albumPage){
+  el.addEventListener('pointerdown', function(e){
+    e.preventDefault();
+    e.stopPropagation();
+    this.setPointerCapture(e.pointerId);
+    const ghostEl = document.getElementById('drag-ghost');
+    const startX = e.clientX, startY = e.clientY;
+    let moved = false;
+
+    const onMove = ev => {
+      if (!moved){
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 6) return;
+        moved = true;
+        ghostEl.innerHTML = el.innerHTML;
+        ghostEl.style.display = 'block';
+        el.classList.add('dragging-src');
+      }
+      ghostEl.style.left = ev.clientX + 'px';
+      ghostEl.style.top  = ev.clientY + 'px';
+    };
+    const onUp = ev => {
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup',   onUp);
+      el.removeEventListener('pointercancel', onUp);
+      ghostEl.style.display = 'none';
+      el.classList.remove('dragging-src');
+      if (!moved) return;
+      const ar = albumPage.getBoundingClientRect();
+      const hit = ev.clientX >= ar.left && ev.clientX <= ar.right &&
+                  ev.clientY >= ar.top  && ev.clientY <= ar.bottom;
+      if (hit){
+        game.album[idx].x = +((ev.clientX - ar.left) / ar.width  * 100).toFixed(1);
+        game.album[idx].y = +((ev.clientY - ar.top)  / ar.height * 100).toFixed(1);
+        save();
+        renderAlbum();
+      }
+    };
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup',   onUp);
+    el.addEventListener('pointercancel', onUp);
   });
 }
 
@@ -1073,79 +1118,70 @@ function onSheetDone(sheetIdx){
 }
 
 function setupSheetDrag(sheetIdx){
-  const sheetEl = document.getElementById('sheet-reward');
+  const sheetEl  = document.getElementById('sheet-reward');
   const albumPage = document.getElementById('album-page');
-  const row = document.getElementById('sheetStickersRow');
-  const ghostEl = document.getElementById('drag-ghost');
-  const sheet = SHEETS[sheetIdx];
-  let sheetDrag = null;
-
-  function sheetMoveDrag(e){
-    if (!sheetDrag) return;
-    e.preventDefault();
-    const dx = e.clientX - sheetDrag.startX, dy = e.clientY - sheetDrag.startY;
-    if (!sheetDrag.active && Math.hypot(dx, dy) < 8) return;
-    if (!sheetDrag.active){
-      sheetDrag.active = true;
-      ghostEl.innerHTML = stickerItemHTML(sheetDrag.item);
-      ghostEl.style.display = 'block';
-      ghostEl.classList.remove('snap');
-      sheetEl.classList.add('dragging');
-    }
-    ghostEl.style.left = e.clientX + 'px';
-    ghostEl.style.top  = e.clientY + 'px';
-  }
-
-  function sheetEndDrag(e){
-    if (!sheetDrag || !sheetDrag.active){ sheetDrag = null; return; }
-    const ar = albumPage.getBoundingClientRect();
-    ghostEl.style.display = 'none';
-    sheetEl.classList.remove('dragging');
-    const onAlbum = e.clientX >= ar.left && e.clientX <= ar.right &&
-                    e.clientY >= ar.top  && e.clientY <= ar.bottom;
-    if (onAlbum){
-      const xPct = parseFloat(((e.clientX - ar.left) / ar.width  * 100).toFixed(1));
-      const yPct = parseFloat(((e.clientY - ar.top)  / ar.height * 100).toFixed(1));
-      const { itemEl, item } = sheetDrag;
-      sheetDrag = null;
-      itemEl.classList.add('placed');
-      placeOnAlbum(item, xPct, yPct);
-      playChime();
-      if (row.querySelectorAll('.sheet-sticker-item:not(.placed)').length === 0)
-        setTimeout(() => onSheetDone(sheetIdx), 300);
-    } else {
-      sheetDrag = null;
-    }
-  }
+  const row      = document.getElementById('sheetStickersRow');
+  const ghostEl  = document.getElementById('drag-ghost');
+  const sheet    = SHEETS[sheetIdx];
 
   row.querySelectorAll('.sheet-sticker-item').forEach((itemEl, i) => {
     const item = sheet.stickers[i];
-    itemEl.addEventListener('pointerdown', (e) => {
+    itemEl.addEventListener('pointerdown', function(e){
       if (itemEl.classList.contains('placed')) return;
       e.preventDefault();
-      sheetDrag = { itemEl, item, active: false, startX: e.clientX, startY: e.clientY };
+      this.setPointerCapture(e.pointerId);
+      const startX = e.clientX, startY = e.clientY;
+      let moved = false;
+
+      const onMove = ev => {
+        if (!moved){
+          if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 6) return;
+          moved = true;
+          ghostEl.innerHTML = stickerItemHTML(item);
+          ghostEl.style.display = 'block';
+          sheetEl.classList.add('dragging');
+        }
+        ghostEl.style.left = ev.clientX + 'px';
+        ghostEl.style.top  = ev.clientY + 'px';
+      };
+      const onUp = ev => {
+        itemEl.removeEventListener('pointermove', onMove);
+        itemEl.removeEventListener('pointerup',   onUp);
+        itemEl.removeEventListener('pointercancel', onUp);
+        ghostEl.style.display = 'none';
+        sheetEl.classList.remove('dragging');
+        if (!moved) return;
+        const ar = albumPage.getBoundingClientRect();
+        const hit = ev.clientX >= ar.left && ev.clientX <= ar.right &&
+                    ev.clientY >= ar.top  && ev.clientY <= ar.bottom;
+        if (hit){
+          const xPct = +((ev.clientX - ar.left) / ar.width  * 100).toFixed(1);
+          const yPct = +((ev.clientY - ar.top)  / ar.height * 100).toFixed(1);
+          itemEl.classList.add('placed');
+          placeOnAlbum(item, xPct, yPct);
+          playChime();
+          if (row.querySelectorAll('.sheet-sticker-item:not(.placed)').length === 0)
+            setTimeout(() => onSheetDone(sheetIdx), 300);
+        }
+      };
+      itemEl.addEventListener('pointermove', onMove);
+      itemEl.addEventListener('pointerup',   onUp);
+      itemEl.addEventListener('pointercancel', onUp);
     });
   });
 
-  window.addEventListener('pointermove', sheetMoveDrag);
-  window.addEventListener('pointerup',   sheetEndDrag);
-
   sheetEl._cleanup = () => {
-    window.removeEventListener('pointermove', sheetMoveDrag);
-    window.removeEventListener('pointerup',   sheetEndDrag);
+    ghostEl.style.display = 'none';
+    sheetEl.classList.remove('dragging');
   };
 
   document.getElementById('sheetPasteAllBtn').onclick = () => {
-    if (sheetEl._cleanup){ sheetEl._cleanup(); sheetEl._cleanup = null; }
     ghostEl.style.display = 'none';
-    const unplaced = Array.from(row.querySelectorAll('.sheet-sticker-item:not(.placed)'));
-    unplaced.forEach((itemEl) => {
-      const i = parseInt(itemEl.dataset.idx, 10);
-      const item = sheet.stickers[i];
-      const xPct = parseFloat((10 + Math.random() * 80).toFixed(1));
-      const yPct = parseFloat((10 + Math.random() * 80).toFixed(1));
+    sheetEl.classList.remove('dragging');
+    Array.from(row.querySelectorAll('.sheet-sticker-item:not(.placed)')).forEach(itemEl => {
+      const item = sheet.stickers[parseInt(itemEl.dataset.idx, 10)];
       itemEl.classList.add('placed');
-      placeOnAlbum(item, xPct, yPct);
+      placeOnAlbum(item, +(10 + Math.random() * 80).toFixed(1), +(10 + Math.random() * 80).toFixed(1));
     });
     setTimeout(() => onSheetDone(sheetIdx), 400);
   };
