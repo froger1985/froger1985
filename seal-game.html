@@ -904,7 +904,7 @@ function load(){
   if (!Array.isArray(game.zukan) || game.zukan.length !== 15) game.zukan = new Array(15).fill(false);
   if (!Array.isArray(game.zukan2) || game.zukan2.length !== 15) game.zukan2 = new Array(15).fill(false);
   if (!Array.isArray(game.sheetsGot) || game.sheetsGot.length !== 4)
-    game.sheetsGot = Array.isArray(game.collected) ? [...game.collected] : [false,false,false,false];
+    game.sheetsGot = [false,false,false,false];
   if (!Array.isArray(game.album)) game.album = [];
 }
 function save(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(game)); } catch(e){} }
@@ -980,7 +980,7 @@ function applyLoadedSave(obj){
   if (!Array.isArray(game.zukan) || game.zukan.length !== 15) game.zukan = new Array(15).fill(false);
   if (!Array.isArray(game.zukan2) || game.zukan2.length !== 15) game.zukan2 = new Array(15).fill(false);
   if (!Array.isArray(game.sheetsGot) || game.sheetsGot.length !== 4)
-    game.sheetsGot = Array.isArray(game.collected) ? [...game.collected] : [false,false,false,false];
+    game.sheetsGot = [false,false,false,false];
   if (!Array.isArray(game.album)) game.album = [];
   if (typeof game.name !== 'string') game.name = '';
   save();
@@ -1151,9 +1151,17 @@ function setupSheetDrag(sheetIdx){
   };
 }
 
+function hideSheet(){
+  const el = document.getElementById('sheet-reward');
+  if (el._cleanup){ el._cleanup(); el._cleanup = null; }
+  el.classList.remove('show', 'dragging');
+  document.getElementById('drag-ghost').style.display = 'none';
+}
+
 function showSheet(sheetIdx){
   const sheet = SHEETS[sheetIdx];
   buildHub(); show('hub');
+  window.scrollTo(0, 0);
   const paper = document.getElementById('sheetPaper');
   paper.style.background = sheet.bg;
   document.getElementById('sheetTitle').textContent = sheet.title;
@@ -1286,6 +1294,7 @@ const goalEl   = document.getElementById('goal');
 const keyguideEl = document.getElementById('keyguide');
 
 function startTask(id){
+  hideSheet();
   initAudio();
   curTask = TASKS[id];
   document.getElementById('hudTask').textContent = curTask.ico + ' ' + curTask.title;
@@ -1300,6 +1309,7 @@ function startTask(id){
 
 // 全シール収集後の「さいごの試練：お城へ」（敵＋アスレチックの複合面）
 function startCastle(){
+  hideSheet();
   initAudio();
   curTask = { reward:-1, type:'castle', title:'さいごの試練：お城へ' };
   document.getElementById('hudTask').textContent = '🏰 さいごの試練：お城へ';
@@ -1373,6 +1383,7 @@ function genRandomSpec(){
   return lastSpec;
 }
 function startBonus(){
+  hideSheet();
   initAudio();
   if (game.zukan.every(Boolean)){          // すでにコンプ済みでも遊べる（ごほうび無し演出）
     // 続行可（重複なしのため新規は出ない→クリア時に「コンプ済み」表示）
@@ -1400,15 +1411,17 @@ function loop(){
 }
 
 document.getElementById('giveUpBtn').addEventListener('click', () => {
-  stopGame(); buildHub(); show('hub');
+  hideSheet(); stopGame(); buildHub(); show('hub');
 });
 document.getElementById('retryBtn').addEventListener('click', () => {
+  hideSheet();
   document.getElementById('retry').classList.remove('show');
   if (curTask && curTask.type === 'castle') startCastle();
   else if (curTask && curTask.type === 'bonus') startBonus();
   else startTask(curTask.id);
 });
 document.getElementById('retryBackBtn').addEventListener('click', () => {
+  hideSheet();
   document.getElementById('retry').classList.remove('show');
   stopGame(); buildHub(); show('hub');
 });
@@ -1810,6 +1823,7 @@ function showReward(idx){
 }
 // ボーナス：図鑑シール獲得（いま集めている図鑑から、未所持を重複なし抽選）
 function awardAnimal(){
+  hideSheet();
   const ac = activeCollection();
   if (!ac){ showZukanComplete(null); return; }   // 全コンプ済み
   const arr = game[ac.key];
