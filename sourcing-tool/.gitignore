@@ -9,3 +9,13 @@ __pycache__/
 
 # Database
 data/*.db
+
+# Playwright session (contains auth cookies — never commit)
+data/mercari_session.json
+
+# 一時デバッグスクリプト
+check_db.py
+debug_*.py
+
+# ログファイル（自動生成）
+logs/*.log

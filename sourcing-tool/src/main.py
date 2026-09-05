@@ -296,5 +296,251 @@ def status():
     click.echo()
 
 
+async def run_fetch_details_pipeline(source: str, limit: int) -> None:
+    from src.scrapers.mercari_item import MercariItemFetcher
+    from src.web.ebay_api import EbayListingAPI
+    from src.web.ebay_auth import EbayAuth
+
+    db = Database(DB_PATH)
+
+    # 詳細未取得の商品（初回フェッチ）
+    without_details = db.get_listings_without_details(source=source, limit=limit)
+    # eBay出品中の商品（売切れ定期チェック）
+    listed = db.get_ebay_listed_listings(source=source)
+
+    # 重複を除外してマージ（出品中を優先して先頭に）
+    seen_ids: set[int] = set()
+    targets: list = []
+    for listing in listed + without_details:
+        if listing.id not in seen_ids:
+            seen_ids.add(listing.id)
+            targets.append(listing)
+
+    if not targets:
+        click.echo("処理対象の商品がありません。")
+        db.close()
+        return
+
+    listed_count = len(listed)
+    new_count = len([l for l in without_details if l.id not in {x.id for x in listed}])
+    click.echo(f"出品中: {listed_count}件（売切れチェック）, 詳細未取得: {new_count}件  合計 {len(targets)}件")
+    click.echo(f"（{CONFIG['scraping']['request_delay_sec']}秒間隔）...")
+    fetcher = MercariItemFetcher()
+    auth = EbayAuth()
+    ebay = EbayListingAPI(auth)
+    ok = skip = withdrawn = 0
+
+    for i, listing in enumerate(targets, 1):
+        details = await fetcher.fetch_details(listing.source_id)
+        if details is None:
+            click.echo(f"  [{i}/{len(targets)}] スキップ（取得失敗）: {listing.title[:40]}")
+            skip += 1
+            continue
+
+        db.update_listing_details(
+            listing_id=listing.id,
+            condition=details["condition"],
+            description=details["description"],
+            extra_images=details["extra_images"],
+            stock_state=details["stock_state"],
+        )
+
+        is_sold_out = not Database._is_in_stock(details["stock_state"]) and details["stock_state"]
+        stock_label = "売切" if is_sold_out else "販売中"
+        click.echo(f"  [{i}/{len(targets)}] {stock_label} | {details['condition'] or '状態不明'} | {listing.title[:40]}")
+        ok += 1
+
+        if is_sold_out and listing.ebay_listing_id:
+            sku = f"mercari_{listing.source_id}"
+            click.echo(f"    → eBay出品取り消し中: SKU={sku}")
+            try:
+                result = await ebay.end_listing(sku)
+                if result["success"]:
+                    db.conn.execute(
+                        "UPDATE source_listings SET ebay_listing_id=NULL, status='new' WHERE id=?",
+                        (listing.id,),
+                    )
+                    db.conn.commit()
+                    click.echo(f"    ✓ 取り消し完了")
+                    withdrawn += 1
+                else:
+                    click.echo(f"    ✗ 取り消し失敗: {result.get('error', '不明なエラー')}")
+            except Exception as e:
+                click.echo(f"    ✗ エラー: {e}")
+
+    await fetcher.close()
+    db.close()
+    msg = f"\n完了: {ok}件更新, {skip}件スキップ"
+    if withdrawn:
+        msg += f", {withdrawn}件eBay取り消し"
+    click.echo(msg)
+
+
+async def run_likes_pipeline(save: bool, limit: int) -> None:
+    from src.scrapers.mercari_likes import MercariLikesScraper
+
+    scraper = MercariLikesScraper()
+    listings = await scraper.fetch_all_likes(limit=limit)
+
+    db = Database(DB_PATH) if save else None
+    new_count = skip_count = 0
+
+    if db:
+        for listing in listings:
+            if db.listing_exists(listing.source, listing.source_id):
+                skip_count += 1
+            else:
+                db.upsert_listing(listing)
+                new_count += 1
+
+        # Detect unliked items only on a full (unlimited) successful fetch
+        if limit == 0 and listings:
+            await _handle_unliked_items(db, listings)
+
+        db.close()
+
+    _print_likes_table(listings)
+    if save:
+        click.echo(f"\n合計: {len(listings)}件 | 新規保存: {new_count}件 | スキップ(重複): {skip_count}件")
+
+
+async def _handle_unliked_items(db: Database, fetched: list) -> None:
+    """Compare freshly fetched likes against DB; end eBay listings or delete unlisted rows."""
+    from src.web.ebay_api import EbayListingAPI
+    from src.web.ebay_auth import EbayAuth
+
+    fetched_ids = {l.source_id for l in fetched}
+    existing = db.get_all_source_ids("mercari_likes")
+    removed = [(sid, eid) for sid, eid in existing if sid not in fetched_ids]
+
+    if not removed:
+        return
+
+    click.echo(f"\n[いいね解除検知] {len(removed)}件がいいねから削除されました")
+
+    auth = EbayAuth()
+    ebay = EbayListingAPI(auth)
+
+    for source_id, ebay_listing_id in removed:
+        if ebay_listing_id:
+            sku = f"mercari_{source_id}"
+            click.echo(f"  → eBay出品取り消し中: SKU={sku} (listing_id={ebay_listing_id})")
+            try:
+                result = await ebay.end_listing(sku)
+                if result["success"]:
+                    db.conn.execute(
+                        "UPDATE source_listings SET ebay_listing_id=NULL, status='new' WHERE source=? AND source_id=?",
+                        ("mercari_likes", source_id),
+                    )
+                    db.conn.commit()
+                    click.echo(f"    ✓ 取り消し完了")
+                else:
+                    click.echo(f"    ✗ 取り消し失敗: {result.get('error', '不明なエラー')}")
+            except Exception as e:
+                click.echo(f"    ✗ エラー: {e}")
+        else:
+            db.delete_listing_by_source_id("mercari_likes", source_id)
+            click.echo(f"  → DB削除: source_id={source_id}")
+
+
+def _print_likes_table(listings: list[SourceListing]) -> None:
+    click.echo(f"\nメルカリいいね商品一覧 ({len(listings)}件)\n")
+    if not listings:
+        click.echo("  (0件)")
+        return
+    click.echo(f"  {'No.':>4}  {'タイトル':<50}  {'価格(円)':>8}  コンディション")
+    click.echo("  " + "-" * 80)
+    for i, listing in enumerate(listings, 1):
+        title = listing.title[:50]
+        click.echo(
+            f"  {i:>4}  {title:<50}  {listing.price_jpy:>8,}  {listing.condition}"
+        )
+
+
+async def run_calc_price_pipeline(source: str, limit: int) -> None:
+    from src.analysis.ebay_pricing import calculate_ebay_price, get_ebay_condition_id, condition_label
+
+    db = Database(DB_PATH)
+    rate = await get_usd_to_jpy()
+    targets = db.get_listings_for_pricing(source=source, limit=limit)
+
+    if not targets:
+        click.echo("eBay価格未計算の商品がありません。")
+        db.close()
+        return
+
+    click.echo(f"\n{len(targets)}件の価格を計算します（1 USD = {rate:.1f} JPY）\n")
+    click.echo(f"  {'タイトル':<45}  {'仕入れ(円)':>10}  {'出品価格(USD)':>13}  コンディション")
+    click.echo("  " + "-" * 90)
+
+    for listing in targets:
+        price_usd = calculate_ebay_price(listing.price_jpy, rate)
+        cond_id = get_ebay_condition_id(listing.condition)
+        db.update_ebay_price(listing.id, price_usd, cond_id)
+        title = listing.title[:45]
+        click.echo(
+            f"  {title:<45}  {listing.price_jpy:>10,}  ${price_usd:>12.2f}  {listing.condition}({condition_label(cond_id)})"
+        )
+
+    db.close()
+    click.echo(f"\n完了: {len(targets)}件の価格を計算しました")
+
+
+@cli.command("calc-price")
+@click.option("--limit", default=0, type=int, help="最大処理件数（0=全件）")
+@click.option("--source", default="mercari_likes", help="対象ソース")
+def calc_price(limit: int, source: str):
+    """eBay出品価格を計算してDBに保存する。"""
+    asyncio.run(run_calc_price_pipeline(source=source, limit=limit))
+
+
+@cli.command()
+@click.option("--save/--no-save", default=True, help="DB に保存するか")
+@click.option("--limit", default=0, type=int, help="最大取得件数（0=全件）")
+def likes(save: bool, limit: int):
+    """メルカリのいいね商品リストを取得する。"""
+    asyncio.run(run_likes_pipeline(save=save, limit=limit))
+
+
+@cli.command("fetch-details")
+@click.option("--limit", default=0, type=int, help="最大処理件数（0=全件）")
+@click.option("--source", default="mercari_likes", help="対象ソース")
+@click.option("--debug", is_flag=True, help="DEBUGログを有効にする")
+def fetch_details(limit: int, source: str, debug: bool):
+    """商品詳細（コンディション・説明・画像）を取得してDBを更新する。"""
+    if debug:
+        logging.getLogger("src.scrapers.mercari_item").setLevel(logging.DEBUG)
+    asyncio.run(run_fetch_details_pipeline(source=source, limit=limit))
+
+
+@cli.command()
+@click.option("--port", default=8000, type=int, help="ポート番号")
+def ui(port: int):
+    """出品管理Webアプリを起動する。スマホからも http://<PCのIP>:<port> でアクセス可能。"""
+    import socket
+    import threading
+    import webbrowser
+
+    import uvicorn
+
+    from src.web.app import app, get_local_ip
+
+    local_ip = get_local_ip()
+    click.echo(f"\n🌐 ブラウザで開く:    http://localhost:{port}")
+    click.echo(f"📱 スマホからアクセス: http://{local_ip}:{port}")
+    click.echo("   (同じWi-Fiに接続している必要があります)\n")
+    click.echo("終了するには Ctrl+C を押してください\n")
+
+    threading.Thread(
+        target=lambda: (
+            __import__("time").sleep(1),
+            webbrowser.open(f"http://localhost:{port}"),
+        ),
+        daemon=True,
+    ).start()
+
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+
+
 if __name__ == "__main__":
     cli()

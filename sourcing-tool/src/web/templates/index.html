@@ -1,0 +1,717 @@
+{% extends "base.html" %}
+{% block main_class %}p-0{% endblock %}
+
+{% block header_right %}
+  {% if not configured %}
+    <span class="text-xs text-red-500">⚠ EBAY_RUNAME未設定</span>
+  {% elif authenticated %}
+    <span class="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">● eBay認証済み</span>
+  {% else %}
+    <a href="/auth/ebay" class="text-xs text-white bg-blue-500 px-3 py-1.5 rounded-full font-medium">
+      eBayログイン
+    </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div id="appContainer" class="flex flex-col" style="height:calc(100dvh - 52px)">
+
+  {% if auth_msg == 'ok' %}
+  <div id="authMsg" class="flex-shrink-0 bg-green-50 border-b border-green-200 px-4 py-2 text-sm text-green-700 flex justify-between items-center">
+    eBay認証が完了しました。
+    <button onclick="document.getElementById('authMsg').remove()" class="text-green-400 ml-2">✕</button>
+  </div>
+  {% elif auth_msg == 'error' %}
+  <div id="authMsg" class="flex-shrink-0 bg-red-50 border-b border-red-200 px-4 py-2 text-sm text-red-700 flex justify-between items-center">
+    eBay認証に失敗しました。<a href="/debug/auth-url" target="_blank" class="underline ml-1">原因を確認</a>
+    <button onclick="document.getElementById('authMsg').remove()" class="text-red-400 ml-2">✕</button>
+  </div>
+  {% endif %}
+
+  <!-- Tabs -->
+  <div class="flex-shrink-0 bg-gray-100 px-3 pt-2 pb-2">
+    <div class="flex gap-1 bg-gray-200 rounded-xl p-1 text-sm">
+      <a href="/?tab=active"
+         class="flex-1 text-center py-2 rounded-lg transition
+                {% if tab=='active' %}bg-white shadow font-semibold{% else %}text-gray-500{% endif %}">
+        未出品 <span class="{% if tab=='active' %}text-blue-500{% endif %}font-bold">{{ counts.active }}</span>
+      </a>
+      <a href="/?tab=listed"
+         class="flex-1 text-center py-2 rounded-lg transition
+                {% if tab=='listed' %}bg-white shadow font-semibold{% else %}text-gray-500{% endif %}">
+        出品済 <span class="{% if tab=='listed' %}text-green-500{% endif %}font-bold">{{ counts.listed }}</span>
+      </a>
+      <a href="/?tab=sold"
+         class="flex-1 text-center py-2 rounded-lg transition
+                {% if tab=='sold' %}bg-white shadow font-semibold{% else %}text-gray-500{% endif %}">
+        売切れ <span class="text-gray-400 font-bold">{{ counts.sold }}</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Two-panel area -->
+  <div class="flex flex-1 min-h-0">
+
+    <!-- Left: item list -->
+    <form id="listForm" method="post" action="/list"
+          class="w-full md:w-96 md:flex-shrink-0 overflow-y-auto bg-gray-50 md:border-r md:border-gray-200">
+      {% if listings %}
+      <div class="space-y-2 p-3">
+        {% for l in listings %}
+        <div class="bg-white rounded-xl shadow-sm p-3 flex gap-2 items-center cursor-pointer
+                    border border-transparent hover:border-blue-300 transition-colors item-card"
+             id="item-{{ l.id }}"
+             onclick="selectItem({{ l.id }}, this)">
+          {% if tab == 'active' %}
+          <input type="checkbox" name="item_ids" value="{{ l.id }}"
+                 class="item-check w-5 h-5 rounded border-gray-300 text-blue-600 flex-shrink-0"
+                 onclick="event.stopPropagation()"
+                 onchange="updateBar()">
+          {% endif %}
+          <img src="{{ l.image_url }}" class="w-14 h-14 object-cover rounded-lg flex-shrink-0 bg-gray-100"
+               onerror="this.style.display='none'">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium leading-snug line-clamp-2 text-gray-800 item-title">
+              {{ l.listing_title or l.title }}
+            </p>
+            <div class="mt-1 flex items-center gap-1.5">
+              <span class="text-xs text-gray-400">¥{{ "{:,}".format(l.price_jpy) }}</span>
+              <span class="text-gray-300 text-xs">→</span>
+              <span class="text-sm font-bold text-blue-600 item-price">${{ "%.2f"|format(l.ebay_price_usd or 0) }}</span>
+            </div>
+            <div class="mt-1 flex items-center gap-1 flex-wrap">
+              {% if l.ebay_condition_id %}
+              <span class="text-xs px-1.5 py-0.5 rounded-full
+                {% if l.ebay_condition_id == 1000 %}bg-blue-50 text-blue-600
+                {% elif l.ebay_condition_id == 1500 %}bg-cyan-50 text-cyan-600
+                {% elif l.ebay_condition_id == 3000 %}bg-green-50 text-green-700
+                {% elif l.ebay_condition_id == 4000 %}bg-yellow-50 text-yellow-700
+                {% else %}bg-gray-100 text-gray-500{% endif %}">
+                {{ l.condition }}
+              </span>
+              {% endif %}
+              {% if not l.listing_category_id and tab == 'active' %}
+              <span class="text-xs text-orange-500">カテゴリ未設定</span>
+              {% endif %}
+              {% if tab == 'listed' and l.ebay_listing_id %}
+              <span class="text-xs text-green-600 truncate max-w-24">{{ l.ebay_listing_id }}</span>
+              <button type="button"
+                      onclick="event.stopPropagation(); endListing({{ l.id }}, this)"
+                      class="text-xs text-red-500 border border-red-200 px-2 py-0.5 rounded-full hover:bg-red-50 ml-auto flex-shrink-0">
+                取り消し
+              </button>
+              {% endif %}
+            </div>
+          </div>
+          <span class="text-gray-300 flex-shrink-0 text-lg">›</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="flex flex-col items-center justify-center h-full py-20 text-gray-400">
+        <p class="text-5xl mb-4">📦</p>
+        <p class="text-sm">商品がありません</p>
+      </div>
+      {% endif %}
+    </form>
+
+    <!-- Right: edit pane (desktop) -->
+    <div id="editPane" class="hidden md:flex flex-col flex-1 overflow-y-auto bg-gray-50">
+      <div id="editPlaceholder" class="flex flex-col items-center justify-center flex-1 text-gray-300 select-none pointer-events-none">
+        <p class="text-5xl mb-3 opacity-40">←</p>
+        <p class="text-sm">商品を選択して編集</p>
+      </div>
+      <div id="editContent" class="hidden p-4 pb-24"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Translate prompt modal -->
+<div id="promptModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80dvh]">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <h2 class="font-semibold text-gray-800">翻訳プロンプト設定</h2>
+      <button onclick="closePromptModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+    </div>
+    <div class="px-5 py-3 flex-1 overflow-y-auto flex flex-col gap-2">
+      <p class="text-xs text-gray-500">「英語に翻訳」ボタンを押したときにClaudeへ送る指示文です。タイトルと説明の翻訳スタイルをカスタマイズできます。</p>
+      <p id="promptModalNote" class="text-xs text-purple-500"></p>
+      <textarea id="promptModalText" rows="12"
+                class="w-full text-sm border border-gray-200 rounded-xl p-3 resize-none bg-gray-50 leading-relaxed outline-none focus:border-purple-300"></textarea>
+    </div>
+    <div class="flex items-center justify-between px-5 py-4 border-t border-gray-100 gap-2">
+      <button onclick="resetPromptModal()"
+              class="text-xs text-gray-400 hover:text-gray-600 underline">デフォルトに戻す</button>
+      <div class="flex gap-2">
+        <button onclick="closePromptModal()"
+                class="text-sm px-4 py-2 rounded-xl border border-gray-200 text-gray-600">キャンセル</button>
+        <button id="promptSaveBtn" onclick="savePromptModal()"
+                class="text-sm px-4 py-2 rounded-xl bg-purple-500 text-white font-medium">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Mobile overlay -->
+<div id="mobileOverlay" class="fixed inset-0 z-30 bg-white overflow-y-auto hidden">
+  <div class="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 z-10 shadow-sm">
+    <button type="button" onclick="closeOverlay()"
+            class="text-blue-500 text-sm font-medium flex-shrink-0">← 戻る</button>
+    <span id="overlayTitle" class="text-sm font-semibold text-gray-700 truncate flex-1"></span>
+  </div>
+  <div id="mobileEditContent" class="p-4 pb-24"></div>
+</div>
+
+<!-- Action bar (bulk listing) -->
+{% if tab == 'active' %}
+<div id="actionBar" class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-xl px-4 py-4 hidden z-20">
+  <div class="max-w-screen-xl mx-auto flex items-center justify-between gap-3">
+    <div class="text-sm text-gray-600">
+      <span id="checkCount" class="font-bold text-blue-600">0</span>件選択中
+    </div>
+    <button type="button" onclick="submitList()"
+            class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-semibold text-sm max-w-xs">
+      eBayに出品する
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<script>
+// ---- List ----
+function updateBar() {
+  const n = document.querySelectorAll('.item-check:checked').length;
+  const bar = document.getElementById('actionBar');
+  if (bar) {
+    bar.classList.toggle('hidden', n === 0);
+    document.getElementById('checkCount').textContent = n;
+  }
+}
+function submitList() {
+  const n = document.querySelectorAll('.item-check:checked').length;
+  if (n === 0) return;
+  if (!confirm(n + '件をeBayに出品しますか？')) return;
+  document.getElementById('listForm').submit();
+}
+
+// ---- Item selection ----
+let currentItemId = null;
+
+async function selectItem(id, cardEl) {
+  document.querySelectorAll('.item-card').forEach(c => {
+    c.classList.remove('border-blue-400', 'bg-blue-50');
+    c.classList.add('border-transparent');
+  });
+  cardEl.classList.remove('border-transparent');
+  cardEl.classList.add('border-blue-400', 'bg-blue-50');
+  currentItemId = id;
+
+  const title = cardEl.querySelector('.item-title')?.textContent?.trim() || '';
+  const loading = '<div class="flex justify-center items-center py-16 text-gray-400 text-sm">読み込み中...</div>';
+  const isMobile = window.innerWidth < 768;
+
+  if (isMobile) {
+    document.getElementById('mobileOverlay').classList.remove('hidden');
+    document.getElementById('overlayTitle').textContent = title;
+    document.getElementById('mobileEditContent').innerHTML = loading;
+  } else {
+    document.getElementById('editPlaceholder').classList.add('hidden');
+    const content = document.getElementById('editContent');
+    content.classList.remove('hidden');
+    content.innerHTML = loading;
+    document.getElementById('editPane').scrollTop = 0;
+  }
+
+  try {
+    const resp = await fetch('/api/item/' + id);
+    if (!resp.ok) throw new Error('fetch failed');
+    const data = await resp.json();
+    const html = renderEditForm(data);
+    if (isMobile) {
+      document.getElementById('mobileEditContent').innerHTML = html;
+    } else {
+      document.getElementById('editContent').innerHTML = html;
+    }
+    initEditForm();
+  } catch (e) {
+    const err = '<div class="text-center py-10 text-red-500 text-sm">読み込みに失敗しました</div>';
+    if (isMobile) {
+      document.getElementById('mobileEditContent').innerHTML = err;
+    } else {
+      document.getElementById('editContent').innerHTML = err;
+    }
+  }
+}
+
+function closeOverlay() {
+  document.getElementById('mobileOverlay').classList.add('hidden');
+  document.querySelectorAll('.item-card').forEach(c => {
+    c.classList.remove('border-blue-400', 'bg-blue-50');
+    c.classList.add('border-transparent');
+  });
+  currentItemId = null;
+}
+
+// ---- Edit form ----
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderEditForm(data) {
+  const CONDITIONS = [
+    [1000,'新品、未使用','New'],
+    [1500,'未使用に近い','New other'],
+    [3000,'目立った傷や汚れなし','Used'],
+    [4000,'やや傷や汚れあり','Good'],
+    [5000,'傷や汚れあり','Acceptable'],
+    [7000,'全体的に状態が悪い','For parts'],
+  ];
+  const condOpts = CONDITIONS.map(([cid, jp, en]) =>
+    `<option value="${cid}"${data.ebay_condition_id == cid ? ' selected' : ''}>${esc(jp)} (${en})</option>`
+  ).join('');
+
+  const imgs = (data.images || []).length
+    ? `<div class="flex gap-2 overflow-x-auto pb-2 mb-4">${
+        data.images.map(img => `<img src="${esc(img)}" class="h-24 w-24 object-cover rounded-xl flex-shrink-0 bg-gray-100" onerror="this.style.display='none'">`).join('')
+      }</div>`
+    : '';
+
+  const catStatus = data.listing_category_id
+    ? `<span class="text-xs text-green-600 mt-1 block" id="ef_cat_selected">選択中: ID ${esc(data.listing_category_id)}</span>`
+    : `<span class="text-xs text-orange-500 mt-1 block" id="ef_cat_selected">未設定（出品前に設定してください）</span>`;
+
+  const mercariLink = data.url
+    ? `<div class="mb-3"><a href="${esc(data.url)}" target="_blank" rel="noopener" class="text-xs text-blue-500 underline">メルカリで確認 ↗</a></div>`
+    : '';
+
+  return `<form id="editForm">
+    ${imgs}
+    ${mercariLink}
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-3">
+      <div class="flex items-center justify-between">
+        <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">タイトル（eBay · 80文字以内）</label>
+        <div class="flex items-center gap-1">
+          <button type="button" id="ef_translate_btn" onclick="translateListing()"
+                  class="text-xs text-white bg-purple-500 hover:bg-purple-600 px-3 py-1 rounded-full font-medium transition-colors">
+            ✦ 英語に翻訳
+          </button>
+          <button type="button" onclick="openPromptModal()"
+                  class="text-xs text-purple-400 hover:text-purple-600 px-1.5 py-1 rounded-full transition-colors" title="プロンプト設定">
+            ⚙
+          </button>
+        </div>
+      </div>
+      <textarea name="title" id="ef_title" rows="2" maxlength="80"
+                class="w-full mt-2 text-sm border-0 focus:ring-0 resize-none leading-relaxed outline-none"
+                oninput="efCharCount()">${esc(data.listing_title)}</textarea>
+      <div class="flex justify-end mt-1">
+        <span id="ef_charCount" class="text-xs text-gray-400">0 / 80</span>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-3">
+      <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">価格設定</label>
+      <input type="hidden" id="ef_price_jpy" value="${data.price_jpy}">
+      <input type="hidden" id="ef_rate" value="${data.rate}">
+      <input type="hidden" name="ebay_price_usd" id="ef_price_hidden" value="${data.ebay_price_usd}">
+      <div class="flex items-end justify-between mt-3 mb-4">
+        <div>
+          <p class="text-xs text-gray-400">仕入れ価格</p>
+          <p class="text-lg font-bold text-gray-700">¥${data.price_jpy.toLocaleString('ja-JP')}</p>
+        </div>
+        <div class="text-xl text-gray-300">→</div>
+        <div class="text-right">
+          <p class="text-xs text-gray-400">eBay出品価格</p>
+          <p class="text-2xl font-bold text-blue-600" id="ef_calc_price">$${data.ebay_price_usd.toFixed(2)}</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-gray-500">国際送料 (USD)</label>
+          <div class="flex items-center border rounded-lg px-3 py-2 mt-1 bg-gray-50">
+            <span class="text-gray-400 text-sm mr-1">$</span>
+            <input type="number" name="shipping_usd" id="ef_shipping"
+                   step="0.5" min="0" value="${data.shipping}"
+                   class="flex-1 bg-transparent text-sm border-0 focus:ring-0 p-0 outline-none"
+                   oninput="efRecalc()">
+          </div>
+          <p class="text-xs text-gray-400 mt-1">デフォルト: $${data.default_shipping}</p>
+        </div>
+        <div>
+          <label class="text-xs text-gray-500">利益マージン</label>
+          <div class="flex items-center border rounded-lg px-3 py-2 mt-1 bg-gray-50">
+            <input type="number" name="margin_pct" id="ef_margin"
+                   step="1" min="0" max="200" value="${data.margin_pct}"
+                   class="flex-1 bg-transparent text-sm border-0 focus:ring-0 p-0 outline-none"
+                   oninput="efRecalc()">
+            <span class="text-gray-400 text-sm ml-1">%</span>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">デフォルト: ${data.default_margin_pct}%</p>
+        </div>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-3">
+      <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">コンディション</label>
+      <select name="condition_id" class="w-full mt-2 text-sm border border-gray-200 rounded-lg p-2.5 bg-gray-50">
+        ${condOpts}
+      </select>
+      <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-4 block">eBayカテゴリ</label>
+      <div id="ef_presets" class="flex flex-wrap gap-1.5 mt-2 mb-2"></div>
+      <input type="text" id="ef_cat_search" placeholder="または検索..."
+             class="w-full text-sm border border-gray-200 rounded-lg p-2.5 bg-gray-50"
+             autocomplete="off">
+      <input type="hidden" name="category_id" id="ef_cat_id" value="${esc(data.listing_category_id)}">
+      ${catStatus}
+      <div id="ef_add_preset_btn" class="hidden mt-2">
+        <button type="button" onclick="showAddPreset()"
+                class="text-xs text-blue-500 border border-blue-200 px-3 py-1.5 rounded-lg">
+          ＋ プリセットに追加
+        </button>
+      </div>
+      <div id="ef_add_preset_form" class="hidden mt-2 flex gap-2 items-center">
+        <input type="text" id="ef_preset_name" placeholder="表示名（例: アニメフィギュア）"
+               class="flex-1 text-sm border border-gray-200 rounded-lg p-2 bg-gray-50">
+        <button type="button" onclick="savePreset()"
+                class="text-xs bg-blue-500 text-white px-3 py-2 rounded-lg flex-shrink-0">保存</button>
+        <button type="button" onclick="cancelPreset()"
+                class="text-xs text-gray-400 px-2 py-2">×</button>
+      </div>
+      <div id="ef_cat_results" class="mt-1 border border-gray-200 rounded-lg overflow-hidden hidden bg-white relative z-10"></div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+      <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">商品説明</label>
+      <textarea name="description" rows="6"
+                class="w-full mt-2 text-sm border border-gray-200 rounded-lg p-3 resize-none bg-gray-50 leading-relaxed outline-none">${esc(data.listing_description)}</textarea>
+    </div>
+    <button type="button" id="ef_save_btn" onclick="saveCurrentItem()"
+            class="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold text-base shadow mb-2">
+      保存する
+    </button>
+  </form>`;
+}
+
+async function loadPresets() {
+  const box = document.getElementById('ef_presets');
+  if (!box) return;
+  try {
+    const res = await fetch('/api/category-presets');
+    const presets = await res.json();
+    if (!presets.length) {
+      box.innerHTML = '<span class="text-xs text-gray-400">プリセットなし（カテゴリ選択後に追加できます）</span>';
+      return;
+    }
+    box.innerHTML = presets.map(p =>
+      `<button type="button"
+               onclick="efSelectCat('${esc(p.id)}','${esc(p.name)}')"
+               class="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-2.5 py-1 rounded-full hover:bg-blue-100 flex items-center gap-1 group">
+         ${esc(p.name)}
+         <span onclick="event.stopPropagation();deletePreset('${esc(p.id)}')"
+               class="hidden group-hover:inline text-blue-300 hover:text-red-400 ml-0.5">×</span>
+       </button>`
+    ).join('');
+  } catch(e) {}
+}
+
+function showAddPreset() {
+  document.getElementById('ef_add_preset_btn').classList.add('hidden');
+  document.getElementById('ef_add_preset_form').classList.remove('hidden');
+  const catId = document.getElementById('ef_cat_id')?.value || '';
+  const catSel = document.getElementById('ef_cat_selected')?.textContent || '';
+  const nameInput = document.getElementById('ef_preset_name');
+  if (nameInput) {
+    const match = catSel.match(/選択中: (.+?) \(#/);
+    nameInput.value = match ? match[1] : '';
+    nameInput.focus();
+  }
+}
+
+function cancelPreset() {
+  document.getElementById('ef_add_preset_btn').classList.remove('hidden');
+  document.getElementById('ef_add_preset_form').classList.add('hidden');
+}
+
+async function savePreset() {
+  const catId = document.getElementById('ef_cat_id')?.value || '';
+  const name = document.getElementById('ef_preset_name')?.value?.trim() || '';
+  if (!catId || !name) return;
+  const res = await fetch('/api/category-presets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, id: catId }),
+  });
+  const data = await res.json();
+  if (data.ok) {
+    cancelPreset();
+    showToast('プリセットに追加しました');
+    loadPresets();
+  } else {
+    showToast(data.error === 'already exists' ? '既に追加済みです' : '保存に失敗しました', 'error');
+  }
+}
+
+async function deletePreset(catId) {
+  if (!confirm('このプリセットを削除しますか？')) return;
+  await fetch('/api/category-presets/' + catId, { method: 'DELETE' });
+  loadPresets();
+}
+
+function initEditForm() {
+  efCharCount();
+  loadPresets();
+  const catInput = document.getElementById('ef_cat_search');
+  if (!catInput) return;
+  let catTimer;
+  catInput.addEventListener('input', function() {
+    clearTimeout(catTimer);
+    const q = this.value.trim();
+    const box = document.getElementById('ef_cat_results');
+    if (q.length < 2) { box.classList.add('hidden'); return; }
+    catTimer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/categories?q=' + encodeURIComponent(q));
+        const data = await res.json();
+        if (!data.length) { box.classList.add('hidden'); return; }
+        if (!data.length) {
+          box.innerHTML = '<div class="px-3 py-2.5 text-sm text-gray-400">結果なし（eBay未認証またはAPIエラー）</div>';
+          box.classList.remove('hidden');
+          return;
+        }
+        box.innerHTML = data.map(c =>
+          `<button type="button"
+                   data-id="${esc(c.id)}" data-name="${esc(c.name)}"
+                   onclick="efSelectCat(this.dataset.id, this.dataset.name)"
+                   class="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 border-b last:border-0">
+             ${esc(c.name)} <span class="text-gray-400 text-xs">#${esc(c.id)}</span>
+           </button>`
+        ).join('');
+        box.classList.remove('hidden');
+      } catch(e) {}
+    }, 400);
+  });
+}
+
+function efCharCount() {
+  const el = document.getElementById('ef_title');
+  if (!el) return;
+  const n = el.value.length;
+  const counter = document.getElementById('ef_charCount');
+  if (!counter) return;
+  counter.textContent = n + ' / 80';
+  counter.className = 'text-xs ' + (n > 70 ? 'text-orange-500 font-semibold' : 'text-gray-400');
+}
+
+function efRecalc() {
+  const pjpy = parseFloat(document.getElementById('ef_price_jpy')?.value) || 0;
+  const rate = parseFloat(document.getElementById('ef_rate')?.value) || 150;
+  const ship = parseFloat(document.getElementById('ef_shipping')?.value) || 0;
+  const margin = (parseFloat(document.getElementById('ef_margin')?.value) || 0) / 100;
+  const cost = pjpy / rate + ship;
+  const raw = (cost * (1 + margin) + 0.30) / (1 - 0.1325 - 0.029);
+  const final = Math.floor(raw) + 0.99;
+  const priceEl = document.getElementById('ef_calc_price');
+  const hidEl = document.getElementById('ef_price_hidden');
+  if (priceEl) priceEl.textContent = '$' + final.toFixed(2);
+  if (hidEl) hidEl.value = final.toFixed(2);
+}
+
+function efSelectCat(id, name) {
+  const idEl = document.getElementById('ef_cat_id');
+  const searchEl = document.getElementById('ef_cat_search');
+  const selEl = document.getElementById('ef_cat_selected');
+  const resultsEl = document.getElementById('ef_cat_results');
+  if (idEl) idEl.value = id;
+  if (searchEl) searchEl.value = name;
+  if (selEl) {
+    selEl.textContent = '選択中: ' + name + ' (#' + id + ')';
+    selEl.className = 'text-xs text-green-600 mt-1 block';
+  }
+  if (resultsEl) resultsEl.classList.add('hidden');
+  const addBtn = document.getElementById('ef_add_preset_btn');
+  const addForm = document.getElementById('ef_add_preset_form');
+  if (addBtn && addForm && addForm.classList.contains('hidden')) {
+    addBtn.classList.remove('hidden');
+  }
+}
+
+async function saveCurrentItem() {
+  if (!currentItemId) return;
+  const form = document.getElementById('editForm');
+  if (!form) return;
+  const btn = document.getElementById('ef_save_btn');
+  btn.textContent = '保存中...';
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/item/' + currentItemId + '/save', {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      body: new FormData(form),
+    });
+    if (resp.ok) {
+      showToast('保存しました');
+      const fd = new FormData(form);
+      const card = document.getElementById('item-' + currentItemId);
+      if (card) {
+        const titleVal = fd.get('title');
+        const priceVal = fd.get('ebay_price_usd');
+        if (titleVal) { const el = card.querySelector('.item-title'); if (el) el.textContent = titleVal; }
+        if (priceVal) { const el = card.querySelector('.item-price'); if (el) el.textContent = '$' + parseFloat(priceVal).toFixed(2); }
+      }
+    } else {
+      showToast('保存に失敗しました', 'error');
+    }
+  } catch(e) {
+    showToast('保存に失敗しました', 'error');
+  }
+  btn.textContent = '保存する';
+  btn.disabled = false;
+}
+
+async function openPromptModal() {
+  const modal = document.getElementById('promptModal');
+  const ta = document.getElementById('promptModalText');
+  const note = document.getElementById('promptModalNote');
+  modal.classList.remove('hidden');
+  ta.value = '読み込み中...';
+  ta.disabled = true;
+  try {
+    const resp = await fetch('/api/translate-prompt');
+    const data = await resp.json();
+    ta.value = data.prompt;
+    note.textContent = data.is_default ? '（現在はデフォルトプロンプトを使用中）' : '（カスタムプロンプト使用中）';
+  } catch(e) {
+    ta.value = '';
+    note.textContent = '読み込みに失敗しました';
+  }
+  ta.disabled = false;
+}
+
+function closePromptModal() {
+  document.getElementById('promptModal').classList.add('hidden');
+}
+
+async function savePromptModal() {
+  const ta = document.getElementById('promptModalText');
+  const prompt = ta.value.trim();
+  if (!prompt) { showToast('プロンプトが空です', 'error'); return; }
+  const btn = document.getElementById('promptSaveBtn');
+  btn.textContent = '保存中...'; btn.disabled = true;
+  try {
+    const resp = await fetch('/api/translate-prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      showToast('プロンプトを保存しました');
+      closePromptModal();
+    } else {
+      showToast(data.error || '保存に失敗しました', 'error');
+    }
+  } catch(e) {
+    showToast('通信エラー', 'error');
+  }
+  btn.textContent = '保存'; btn.disabled = false;
+}
+
+async function resetPromptModal() {
+  if (!confirm('デフォルトプロンプトに戻しますか？')) return;
+  const resp = await fetch('/api/translate-prompt/reset', { method: 'POST' });
+  const data = await resp.json();
+  if (data.ok) {
+    document.getElementById('promptModalText').value = data.prompt;
+    document.getElementById('promptModalNote').textContent = '（デフォルトに戻しました）';
+    showToast('デフォルトに戻しました');
+  }
+}
+
+async function translateListing() {
+  const titleEl = document.getElementById('ef_title');
+  const descEl = document.querySelector('[name="description"]');
+  const btn = document.getElementById('ef_translate_btn');
+  if (!titleEl) return;
+
+  const title = titleEl.value.trim();
+  const description = descEl ? descEl.value.trim() : '';
+  if (!title && !description) {
+    showToast('タイトルまたは説明を入力してください', 'error');
+    return;
+  }
+
+  btn.textContent = '翻訳中...';
+  btn.disabled = true;
+
+  try {
+    const resp = await fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, description }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      showToast(data.error || '翻訳に失敗しました', 'error');
+      return;
+    }
+    if (data.title) {
+      titleEl.value = data.title;
+      efCharCount();
+    }
+    if (data.description && descEl) {
+      descEl.value = data.description;
+    }
+    showToast('翻訳しました');
+  } catch(e) {
+    showToast('通信エラー', 'error');
+  } finally {
+    btn.textContent = '✦ 英語に翻訳';
+    btn.disabled = false;
+  }
+}
+
+async function endListing(id, btnEl) {
+  if (!confirm('この商品の出品を取り消しますか？\neBay上の出品も削除されます。')) return;
+  btnEl.textContent = '処理中...';
+  btnEl.disabled = true;
+  try {
+    const resp = await fetch('/item/' + id + '/end', { method: 'POST' });
+    const data = await resp.json();
+    if (data.success) {
+      showToast('出品を取り消しました');
+      const card = document.getElementById('item-' + id);
+      if (card) card.remove();
+      const countEl = document.querySelector('a[href="/?tab=listed"] span');
+      if (countEl) countEl.textContent = Math.max(0, parseInt(countEl.textContent) - 1);
+      if (currentItemId === id) {
+        document.getElementById('editPlaceholder')?.classList.remove('hidden');
+        document.getElementById('editContent')?.classList.add('hidden');
+        document.getElementById('mobileOverlay')?.classList.add('hidden');
+        currentItemId = null;
+      }
+    } else {
+      showToast('取り消し失敗: ' + (data.error || '不明なエラー'), 'error');
+      btnEl.textContent = '取り消し';
+      btnEl.disabled = false;
+    }
+  } catch(e) {
+    showToast('通信エラー', 'error');
+    btnEl.textContent = '取り消し';
+    btnEl.disabled = false;
+  }
+}
+
+function showToast(msg, type = 'success') {
+  document.querySelector('.toast-msg')?.remove();
+  const t = document.createElement('div');
+  t.className = 'toast-msg fixed bottom-20 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-full text-sm font-medium shadow-lg z-50 ' +
+    (type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => {
+    t.style.transition = 'opacity 0.3s';
+    t.style.opacity = '0';
+    setTimeout(() => t.remove(), 300);
+  }, 2000);
+}
+</script>
+{% endblock %}
