@@ -11,7 +11,7 @@ _CONFIG_PATH = _BASE_DIR / "config.yaml"
 
 
 def load_config() -> dict:
-    with open(_CONFIG_PATH) as f:
+    with open(_CONFIG_PATH, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 

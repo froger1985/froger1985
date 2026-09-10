@@ -33,6 +33,11 @@ alerts:
   # 高額商品（この金額以上）は別途ハイライト通知
   highlight_profit_jpy: 10000
 
+# eBay出品設定（いいね商品の自動出品用）
+listing:
+  international_shipping_usd: 25.0   # 国際送料見積もり（USD）
+  profit_margin: 0.15                 # 目標利益マージン 15%
+
 # データベース
 database:
   path: "data/sourcing.db"
